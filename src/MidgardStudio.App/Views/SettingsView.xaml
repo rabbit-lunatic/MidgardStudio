@@ -9,90 +9,323 @@
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:SettingsViewModel}">
 
-    <DockPanel>
-        <TextBlock DockPanel.Dock="Top" Text="Settings" Style="{StaticResource TitleScreen}" Margin="0,0,0,12" />
+    <UserControl.Resources>
+        <!-- Left nav entry: rounded, highlights on hover + selection -->
+        <Style x:Key="SettingsNavItem" TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="12,9" />
+            <Setter Property="Margin" Value="0,2" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Foreground" Value="#D8D8E4" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Bd" CornerRadius="8" Background="Transparent" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#14FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#2E8D2DF2" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
-        <TabControl Background="Transparent" BorderThickness="0">
-            <!-- ===== General ===== -->
-            <TabItem Header="General">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,8,0">
-                    <StackPanel MaxWidth="640" HorizontalAlignment="Left">
-                        <ui:Card Padding="16,14">
-                            <StackPanel>
-                                <TextBlock Text="Saving behaviour" Style="{StaticResource SectionTitle}" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                <TextBlock Opacity="0.6" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,12"
-                                           Text="Choose when edits are written to disk. Auto-save writes safely (in-place, never overwriting your functions) but only manual saves create a dated restore point in the Backup Manager." />
+        <!-- One color row: name + live swatch + hex box (shared by semantic & element colors) -->
+        <DataTemplate x:Key="AcColorRow">
+            <Grid Margin="0,3">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="170" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="{Binding Name}" VerticalAlignment="Center" Opacity="0.85" />
+                <Border Grid.Column="1" Width="22" Height="22" CornerRadius="4" Margin="0,0,8,0"
+                        BorderBrush="#55FFFFFF" BorderThickness="1" Background="{Binding Swatch}" />
+                <ui:TextBox Grid.Column="2" Text="{Binding Hex, UpdateSourceTrigger=LostFocus}" Width="110" FontFamily="Consolas"
+                            PlaceholderText="RRGGBB" />
+            </Grid>
+        </DataTemplate>
+    </UserControl.Resources>
 
-                                <RadioButton GroupName="Save" IsChecked="{Binding IsManual}" Margin="0,4">
-                                    <StackPanel>
-                                        <TextBlock Text="Manual save" FontWeight="SemiBold" />
-                                        <TextBlock Text="Files are written only when you click Save (Ctrl+S). Recommended." Opacity="0.6" FontSize="12" />
-                                    </StackPanel>
-                                </RadioButton>
-                                <RadioButton GroupName="Save" IsChecked="{Binding IsInterval}" Margin="0,4">
-                                    <StackPanel>
-                                        <TextBlock Text="Save every N seconds" FontWeight="SemiBold" />
-                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                            <TextBlock Text="Interval (seconds):" VerticalAlignment="Center" Opacity="0.75" Margin="0,0,8,0" />
-                                            <ui:TextBox Width="80" Text="{Binding IntervalSeconds, UpdateSourceTrigger=LostFocus}" IsEnabled="{Binding IsInterval}" />
-                                        </StackPanel>
-                                        <TextBlock Text="Pending changes are written automatically on this timer (minimum 5 seconds)." Opacity="0.6" FontSize="12" Margin="0,4,0,0" />
-                                    </StackPanel>
-                                </RadioButton>
-                                <RadioButton GroupName="Save" IsChecked="{Binding IsOnEdit}" Margin="0,4">
-                                    <StackPanel>
-                                        <TextBlock Text="Auto-save on edits" FontWeight="SemiBold" />
-                                        <TextBlock Text="Changes are written a moment after you stop editing." Opacity="0.6" FontSize="12" />
-                                    </StackPanel>
-                                </RadioButton>
-                            </StackPanel>
-                        </ui:Card>
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="220" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
 
-                        <ui:Card Padding="16,14" Margin="0,12,0,0">
-                            <StackPanel>
-                                <TextBlock Text="Backups" Style="{StaticResource SectionTitle}" FontWeight="SemiBold" Margin="0,0,0,8" />
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="Keep the newest" VerticalAlignment="Center" Opacity="0.75" Margin="0,0,8,0" />
-                                    <ui:TextBox Width="72" Text="{Binding BackupRetention, UpdateSourceTrigger=LostFocus}" />
-                                    <TextBlock Text="snapshots per profile" VerticalAlignment="Center" Opacity="0.75" Margin="8,0,0,0" />
+        <!-- ===== Left-side menu ===== -->
+        <DockPanel Grid.Column="0" Margin="0,0,18,0">
+            <TextBlock DockPanel.Dock="Top" Text="Settings" Style="{StaticResource TitleScreen}" Margin="0,0,0,16" />
+            <ListBox x:Name="SettingsNav" SelectedIndex="0" Background="Transparent" BorderThickness="0"
+                     ItemContainerStyle="{StaticResource SettingsNavItem}">
+                <ListBoxItem>
+                    <StackPanel Orientation="Horizontal">
+                        <ui:SymbolIcon Symbol="Options24" FontSize="18" Margin="0,0,12,0" VerticalAlignment="Center" />
+                        <TextBlock Text="General" VerticalAlignment="Center" FontSize="13.5" />
+                    </StackPanel>
+                </ListBoxItem>
+                <ListBoxItem>
+                    <StackPanel Orientation="Horizontal">
+                        <ui:SymbolIcon Symbol="Keyboard24" FontSize="18" Margin="0,0,12,0" VerticalAlignment="Center" />
+                        <TextBlock Text="Shortcuts" VerticalAlignment="Center" FontSize="13.5" />
+                    </StackPanel>
+                </ListBoxItem>
+                <ListBoxItem>
+                    <StackPanel Orientation="Horizontal">
+                        <ui:SymbolIcon Symbol="Sparkle24" FontSize="18" Margin="0,0,12,0" VerticalAlignment="Center" />
+                        <TextBlock Text="Autocomplete" VerticalAlignment="Center" FontSize="13.5" />
+                    </StackPanel>
+                </ListBoxItem>
+                <ListBoxItem>
+                    <StackPanel Orientation="Horizontal">
+                        <ui:SymbolIcon Symbol="Info24" FontSize="18" Margin="0,0,12,0" VerticalAlignment="Center" />
+                        <TextBlock Text="About" VerticalAlignment="Center" FontSize="13.5" />
+                    </StackPanel>
+                </ListBoxItem>
+            </ListBox>
+        </DockPanel>
+
+        <!-- ===== Right-side content (switched by the nav selection) ===== -->
+        <Grid Grid.Column="1">
+
+            <!-- General -->
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,2,8,0">
+                <ScrollViewer.Style>
+                    <Style TargetType="ScrollViewer">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedIndex, ElementName=SettingsNav}" Value="0">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ScrollViewer.Style>
+                <StackPanel MaxWidth="640" HorizontalAlignment="Left">
+                    <ui:Card Padding="16,14">
+                        <StackPanel>
+                            <TextBlock Text="Saving behaviour" Style="{StaticResource SectionTitle}" FontWeight="SemiBold" Margin="0,0,0,4" />
+                            <TextBlock Opacity="0.6" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,12"
+                                       Text="Choose when edits are written to disk. Auto-save writes safely (in-place, never overwriting your functions) but only manual saves create a dated restore point in the Backup Manager." />
+
+                            <RadioButton GroupName="Save" IsChecked="{Binding IsManual}" Margin="0,4">
+                                <StackPanel>
+                                    <TextBlock Text="Manual save" FontWeight="SemiBold" />
+                                    <TextBlock Text="Files are written only when you click Save (Ctrl+S). Recommended." Opacity="0.6" FontSize="12" />
                                 </StackPanel>
-                                <TextBlock Text="A dated snapshot is saved after every manual save and before every restore. Older snapshots beyond this count are pruned automatically. Manage them in Tools ▸ Backup Manager." Opacity="0.6" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0" />
-                            </StackPanel>
-                        </ui:Card>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
+                            </RadioButton>
+                            <RadioButton GroupName="Save" IsChecked="{Binding IsInterval}" Margin="0,4">
+                                <StackPanel>
+                                    <TextBlock Text="Save every N seconds" FontWeight="SemiBold" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                        <TextBlock Text="Interval (seconds):" VerticalAlignment="Center" Opacity="0.75" Margin="0,0,8,0" />
+                                        <ui:TextBox Width="80" Text="{Binding IntervalSeconds, UpdateSourceTrigger=LostFocus}" IsEnabled="{Binding IsInterval}" />
+                                    </StackPanel>
+                                    <TextBlock Text="Pending changes are written automatically on this timer (minimum 5 seconds)." Opacity="0.6" FontSize="12" Margin="0,4,0,0" />
+                                </StackPanel>
+                            </RadioButton>
+                            <RadioButton GroupName="Save" IsChecked="{Binding IsOnEdit}" Margin="0,4">
+                                <StackPanel>
+                                    <TextBlock Text="Auto-save on edits" FontWeight="SemiBold" />
+                                    <TextBlock Text="Changes are written a moment after you stop editing." Opacity="0.6" FontSize="12" />
+                                </StackPanel>
+                            </RadioButton>
+                        </StackPanel>
+                    </ui:Card>
 
-            <!-- ===== Shortcuts ===== -->
-            <TabItem Header="Shortcuts">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,8,0">
-                    <StackPanel MaxWidth="640" HorizontalAlignment="Left">
-                        <ui:Card Padding="16,14">
-                            <StackPanel>
-                                <TextBlock Text="Keyboard shortcuts" Style="{StaticResource SectionTitle}" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                <TextBlock Opacity="0.6" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,12"
-                                           Text="Click a field and press the keys you want — including combinations like Ctrl+Shift+F. Changes apply immediately. Backspace clears a shortcut; Esc cancels." />
-                                <ItemsControl ItemsSource="{Binding Shortcuts}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Grid Margin="0,4">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="220" />
-                                                    <ColumnDefinition Width="200" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Text="{Binding Display}" VerticalAlignment="Center" Opacity="0.9" />
-                                                <ui:TextBox Grid.Column="1" Text="{Binding Gesture, Mode=TwoWay}"
-                                                            common:ShortcutCapture.Enabled="True"
-                                                            PlaceholderText="Press a shortcut…" />
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                    <ui:Card Padding="16,14" Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Backups" Style="{StaticResource SectionTitle}" FontWeight="SemiBold" Margin="0,0,0,8" />
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Keep the newest" VerticalAlignment="Center" Opacity="0.75" Margin="0,0,8,0" />
+                                <ui:TextBox Width="72" Text="{Binding BackupRetention, UpdateSourceTrigger=LostFocus}" />
+                                <TextBlock Text="snapshots per profile" VerticalAlignment="Center" Opacity="0.75" Margin="8,0,0,0" />
                             </StackPanel>
-                        </ui:Card>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-        </TabControl>
-    </DockPanel>
+                            <TextBlock Text="A dated snapshot is saved after every manual save and before every restore. Older snapshots beyond this count are pruned automatically. Manage them in Tools ▸ Backup Manager." Opacity="0.6" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0" />
+                        </StackPanel>
+                    </ui:Card>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Shortcuts -->
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,2,8,0">
+                <ScrollViewer.Style>
+                    <Style TargetType="ScrollViewer">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedIndex, ElementName=SettingsNav}" Value="1">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ScrollViewer.Style>
+                <StackPanel MaxWidth="640" HorizontalAlignment="Left">
+                    <ui:Card Padding="16,14">
+                        <StackPanel>
+                            <TextBlock Text="Keyboard shortcuts" Style="{StaticResource SectionTitle}" FontWeight="SemiBold" Margin="0,0,0,4" />
+                            <TextBlock Opacity="0.6" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,12"
+                                       Text="Click a field and press the keys you want — including combinations like Ctrl+Shift+F. Changes apply immediately. Backspace clears a shortcut; Esc cancels." />
+                            <ItemsControl ItemsSource="{Binding Shortcuts}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="220" />
+                                                <ColumnDefinition Width="200" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Display}" VerticalAlignment="Center" Opacity="0.9" />
+                                            <ui:TextBox Grid.Column="1" Text="{Binding Gesture, Mode=TwoWay}"
+                                                        common:ShortcutCapture.Enabled="True"
+                                                        PlaceholderText="Press a shortcut…" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ui:Card>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Autocomplete -->
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,2,8,0">
+                <ScrollViewer.Style>
+                    <Style TargetType="ScrollViewer">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedIndex, ElementName=SettingsNav}" Value="2">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ScrollViewer.Style>
+                <StackPanel MaxWidth="720" HorizontalAlignment="Left">
+                    <TextBlock Opacity="0.6" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,12"
+                               Text="Controls how Autocomplete generates a client item's name and description from the server item — which lines to include, the colors, the wording, and the defaults." />
+
+                    <!-- Live preview -->
+                    <ui:Card Padding="16,14" Margin="0,0,0,12">
+                        <StackPanel>
+                            <TextBlock Text="Live preview" Style="{StaticResource SectionTitle}" FontWeight="SemiBold" Margin="0,0,0,2" />
+                            <TextBlock Text="A sample Fire sword rendered with your current settings — updates as you edit below." Opacity="0.6" FontSize="12" Margin="0,0,0,8" />
+                            <Border Background="#EFEAD9" CornerRadius="4" Padding="10" MinHeight="80">
+                                <TextBlock x:Name="PreviewBox" TextWrapping="Wrap" FontSize="12" Foreground="Black" FontFamily="Segoe UI" />
+                            </Border>
+                        </StackPanel>
+                    </ui:Card>
+
+                    <!-- What to include -->
+                    <ui:Card Padding="16,14">
+                        <StackPanel>
+                            <TextBlock Text="What to include" Style="{StaticResource SectionTitle}" FontWeight="SemiBold" Margin="0,0,0,8" />
+                            <ItemsControl ItemsSource="{Binding AutocompleteToggles}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <ui:ToggleSwitch Content="{Binding Display}" IsChecked="{Binding IsOn, Mode=TwoWay}"
+                                                         Width="330" Margin="0,3" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ui:Card>
+
+                    <!-- Behaviour -->
+                    <ui:Card Padding="16,14" Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Behaviour" Style="{StaticResource SectionTitle}" FontWeight="SemiBold" Margin="0,0,0,8" />
+                            <ui:ToggleSwitch Content="Overwrite existing text when running Autocomplete"
+                                             IsChecked="{Binding OverwriteExisting, Mode=TwoWay}" Margin="0,2,0,10" />
+                            <TextBlock Text="Default unidentified description" Opacity="0.8" Margin="0,0,0,3" />
+                            <ui:TextBox Text="{Binding DefaultUnidentifiedDescription, UpdateSourceTrigger=LostFocus}"
+                                        AcceptsReturn="True" MinHeight="58" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                        PlaceholderText="Applied to the unidentified description on autocomplete (blank = leave it)" />
+                            <TextBlock Text="Fallback text for fields with no server value" Opacity="0.8" Margin="0,10,0,3" />
+                            <ui:TextBox Text="{Binding MissingValueText, UpdateSourceTrigger=LostFocus}" Width="220" HorizontalAlignment="Left"
+                                        PlaceholderText="blank = hide the line" />
+                        </StackPanel>
+                    </ui:Card>
+
+                    <!-- Colors -->
+                    <ui:Card Padding="16,14" Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Colors" Style="{StaticResource SectionTitle}" FontWeight="SemiBold" Margin="0,0,0,4" />
+                            <TextBlock Text="Hex (RRGGBB) colors applied to the generated lines." Opacity="0.6" FontSize="12" Margin="0,0,0,8" />
+                            <ItemsControl ItemsSource="{Binding SemanticColors}" ItemTemplate="{StaticResource AcColorRow}" />
+                            <Border Height="1" Background="#1FFFFFFF" Margin="0,12" />
+                            <TextBlock Text="Weapon element colors" Opacity="0.85" FontWeight="SemiBold" Margin="0,0,0,6" />
+                            <ItemsControl ItemsSource="{Binding ElementColors}" ItemTemplate="{StaticResource AcColorRow}" />
+                        </StackPanel>
+                    </ui:Card>
+
+                    <!-- Field labels -->
+                    <ui:Card Padding="16,14" Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Field labels" Style="{StaticResource SectionTitle}" FontWeight="SemiBold" Margin="0,0,0,4" />
+                            <TextBlock Text="Rename the word shown before each value (e.g. “Weight” → “Item Weight”). Blank = default." Opacity="0.6" FontSize="12" Margin="0,0,0,8" />
+                            <ItemsControl ItemsSource="{Binding FieldLabels}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,3">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="180" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{Binding DefaultLabel}" VerticalAlignment="Center" Opacity="0.85" />
+                                            <ui:TextBox Grid.Column="1" Text="{Binding Override, UpdateSourceTrigger=LostFocus}"
+                                                        PlaceholderText="{Binding DefaultLabel}" Width="240" HorizontalAlignment="Left" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ui:Card>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- About -->
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,2,8,0">
+                <ScrollViewer.Style>
+                    <Style TargetType="ScrollViewer">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedIndex, ElementName=SettingsNav}" Value="3">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ScrollViewer.Style>
+                <StackPanel MaxWidth="640" HorizontalAlignment="Left">
+                    <ui:Card Padding="18,16">
+                        <StackPanel>
+                            <TextBlock Text="Midgard Studio" Style="{StaticResource TitleSection}" Margin="0,0,0,6" />
+                            <TextBlock Opacity="0.75" FontSize="12.5" TextWrapping="Wrap"
+                                       Text="A native editor for Ragnarok server databases and client files — server YAML, client Lua, item combos, drops and sprites in one place." />
+                            <Border Height="1" Background="#1FFFFFFF" Margin="0,14,0,14" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="120" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Author" Opacity="0.6" Margin="0,2" />
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="Kyoshio" Margin="0,2" />
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Edition" Opacity="0.6" Margin="0,2" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="Desktop (Windows)" Margin="0,2" />
+                            </Grid>
+                        </StackPanel>
+                    </ui:Card>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
 </UserControl>

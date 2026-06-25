@@ -39,7 +39,7 @@
                         <ui:Button Command="{Binding DuplicateCommand}" Margin="0,0,4,0" ToolTip="Duplicate the selected entry as a new custom">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Copy24" /></ui:Button.Icon>
                         </ui:Button>
-                        <ui:Button Command="{Binding CopyEntryCommand}" Margin="0,0,4,0" ToolTip="Copy the selected entry as YAML to the clipboard">
+                        <ui:Button Command="{Binding CopyEntryCommand}" Margin="0,0,4,0" ToolTip="Copy the selected entry as YAML — select several (Ctrl/Shift+click) to copy them all">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="ClipboardLink24" /></ui:Button.Icon>
                         </ui:Button>
                         <ToggleButton IsChecked="{Binding List.OverriddenOnly, Mode=TwoWay}"
@@ -56,6 +56,8 @@
 
                 <ListView x:Name="MasterList" ItemsSource="{Binding List.Rows}"
                           SelectedItem="{Binding List.SelectedRow, Mode=TwoWay}"
+                          SelectionMode="Extended"
+                          common:ListBehaviors.SelectedItems="{Binding List.SelectedRows}"
                           Background="Transparent" BorderThickness="0"
                           ItemContainerStyle="{StaticResource MasterListItem}"
                           VirtualizingPanel.IsVirtualizing="True"
@@ -64,28 +66,47 @@
                           ScrollViewer.VerticalScrollBarVisibility="Visible"
                           ScrollViewer.IsDeferredScrollingEnabled="False"
                           common:ListBehaviors.SelectOnRightClick="True">
+                    <ListView.InputBindings>
+                        <KeyBinding Key="C" Modifiers="Control" Command="{Binding CopyEntryCommand}" />
+                        <KeyBinding Key="D" Modifiers="Control+Shift" Command="{Binding CopyToIdCommand}" />
+                        <KeyBinding Key="R" Modifiers="Control+Shift" Command="{Binding RestoreToDefaultCommand}" />
+                        <KeyBinding Key="G" Modifiers="Control" Command="{Binding SelectInClientItemsCommand}" />
+                        <KeyBinding Key="G" Modifiers="Control+Shift" Command="{Binding AddInClientItemsCommand}" />
+                        <KeyBinding Key="Delete" Command="{Binding DeleteEntryCommand}" />
+                        <KeyBinding Key="F2" Command="{Binding ChangeIdCommand}" />
+                    </ListView.InputBindings>
                     <ListView.ContextMenu>
                         <ContextMenu>
-                            <MenuItem Header="Restore to default"
+                            <MenuItem Header="Duplicate" InputGestureText="Ctrl+D"
+                                      Command="{Binding PlacementTarget.DataContext.DuplicateCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      ToolTip="Duplicate the selected entry as a new custom">
+                                <MenuItem.Icon><ui:SymbolIcon Symbol="Copy24" /></MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Header="Copy YAML" InputGestureText="Ctrl+C"
+                                      Command="{Binding PlacementTarget.DataContext.CopyEntryCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      ToolTip="Copy the selected entry — or every selected entry — as YAML to the clipboard">
+                                <MenuItem.Icon><ui:SymbolIcon Symbol="ClipboardLink24" /></MenuItem.Icon>
+                            </MenuItem>
+                            <Separator />
+                            <MenuItem Header="Change ID…" InputGestureText="F2"
+                                      Command="{Binding PlacementTarget.DataContext.ChangeIdCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            <MenuItem Header="Copy to ID…" InputGestureText="Ctrl+Shift+D"
+                                      Command="{Binding PlacementTarget.DataContext.CopyToIdCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            <MenuItem Header="Restore to default" InputGestureText="Ctrl+Shift+R"
                                       Visibility="{Binding PlacementTarget.DataContext.CanRestore, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}"
                                       Command="{Binding PlacementTarget.DataContext.RestoreToDefaultCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                       ToolTip="Discard customizations and revert this entry to its base values">
                                 <MenuItem.Icon><ui:SymbolIcon Symbol="ArrowUndo24" /></MenuItem.Icon>
                             </MenuItem>
-                            <Separator Visibility="{Binding PlacementTarget.DataContext.CanRestore, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}" />
-                            <MenuItem Header="Copy YAML"
-                                      Command="{Binding PlacementTarget.DataContext.CopyEntryCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                            <MenuItem Header="Change ID…"
-                                      Command="{Binding PlacementTarget.DataContext.ChangeIdCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                            <MenuItem Header="Copy to ID…"
-                                      Command="{Binding PlacementTarget.DataContext.CopyToIdCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                            <MenuItem Header="Delete"
-                                      Command="{Binding PlacementTarget.DataContext.DeleteEntryCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            <MenuItem Header="Delete" InputGestureText="Del"
+                                      Command="{Binding PlacementTarget.DataContext.DeleteEntryCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
+                                <MenuItem.Icon><ui:SymbolIcon Symbol="Delete24" /></MenuItem.Icon>
+                            </MenuItem>
                             <Separator Visibility="{Binding PlacementTarget.DataContext.IsItemDb, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}" />
-                            <MenuItem Header="Select in Client Items"
+                            <MenuItem Header="Select in Client Items" InputGestureText="Ctrl+G"
                                       Visibility="{Binding PlacementTarget.DataContext.IsItemDb, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}"
                                       Command="{Binding PlacementTarget.DataContext.SelectInClientItemsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                            <MenuItem Header="Add in Client Items"
+                            <MenuItem Header="Add in Client Items" InputGestureText="Ctrl+Shift+G"
                                       Visibility="{Binding PlacementTarget.DataContext.IsItemDb, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}"
                                       Command="{Binding PlacementTarget.DataContext.AddInClientItemsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                         </ContextMenu>

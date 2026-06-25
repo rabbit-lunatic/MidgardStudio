@@ -55,56 +55,20 @@ public partial class ClientItemsView : UserControl
             Insert("^" + hex);
     }
 
-    /// <summary>Inserts a code at the caret of the active (last-focused) description box.</summary>
+    /// <summary>Inserts a code at the caret of the active (last-focused) description box, committing the
+    /// change to the bound view-model immediately so it records an undo step and flags unsaved changes
+    /// (the boxes bind with UpdateSourceTrigger=LostFocus, which otherwise wouldn't fire on a button click).</summary>
     private void Insert(string code)
     {
         var box = _activeDesc ?? IdDescBox;
         int caret = box.CaretIndex;
         box.Text = box.Text.Insert(caret, code);
         box.CaretIndex = caret + code.Length;
+        box.GetBindingExpression(WpfTextBox.TextProperty)?.UpdateSource();
         box.Focus();
     }
 
-    private void IdDesc_TextChanged(object sender, TextChangedEventArgs e) => RenderColored(IdPreview, IdDescBox.Text);
+    private void IdDesc_TextChanged(object sender, TextChangedEventArgs e) => Common.RoColorText.Render(IdPreview, IdDescBox.Text);
 
-    private void UnidDesc_TextChanged(object sender, TextChangedEventArgs e) => RenderColored(UnidPreview, UnidDescBox.Text);
-
-    /// <summary>Renders RO <c>^RRGGBB</c>-coded text into a TextBlock (default black, newlines honored).</summary>
-    private static void RenderColored(TextBlock target, string? text)
-    {
-        target.Inlines.Clear();
-        if (string.IsNullOrEmpty(text)) return;
-
-        var color = Colors.Black;
-        var sb = new StringBuilder();
-
-        void Flush()
-        {
-            if (sb.Length == 0) return;
-            target.Inlines.Add(new Run(sb.ToString()) { Foreground = new SolidColorBrush(color) });
-            sb.Clear();
-        }
-
-        for (int i = 0; i < text!.Length;)
-        {
-            char c = text[i];
-            if (c == '^' && i + 6 < text.Length && IsHex6(text, i + 1))
-            {
-                Flush();
-                color = (Color)ColorConverter.ConvertFromString("#" + text.Substring(i + 1, 6))!;
-                i += 7;
-            }
-            else if (c == '\n') { Flush(); target.Inlines.Add(new LineBreak()); i++; }
-            else if (c == '\r') { i++; }
-            else { sb.Append(c); i++; }
-        }
-        Flush();
-    }
-
-    private static bool IsHex6(string s, int start)
-    {
-        for (int k = start; k < start + 6; k++)
-            if (!Uri.IsHexDigit(s[k])) return false;
-        return true;
-    }
+    private void UnidDesc_TextChanged(object sender, TextChangedEventArgs e) => Common.RoColorText.Render(UnidPreview, UnidDescBox.Text);
 }

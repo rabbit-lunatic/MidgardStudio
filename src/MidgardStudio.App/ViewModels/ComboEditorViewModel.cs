@@ -215,6 +215,16 @@ public sealed partial class ComboEditorViewModel : ObservableObject, IDisposable
             }));
     }
 
+    /// <summary>Copies the selected combo set as a complete item_combo import YAML document.</summary>
+    [RelayCommand]
+    private void CopyComboYaml(ComboSetRowViewModel? row)
+    {
+        row ??= SelectedRow;
+        if (row is null) return;
+        var yaml = new Core.Serialization.YamlDbWriter().WriteToString(_schema, new[] { row.Record });
+        try { System.Windows.Clipboard.SetText(yaml); } catch { /* clipboard busy */ }
+    }
+
     // ----- Alternative (item-set) level -----
 
     [RelayCommand]

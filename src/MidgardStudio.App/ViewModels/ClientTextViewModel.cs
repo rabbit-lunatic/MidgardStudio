@@ -20,15 +20,20 @@ public sealed partial class ClientTextViewModel : ObservableObject
     private readonly GrfImageService _images;
     private readonly SpriteLinkService? _sprite;
     private readonly EditCommandStack _stack;
+    private readonly AppSettingsService _settings;
+    private readonly Func<string, string?>? _skill;
     private readonly ItemInfoEntry _entry;
 
-    public ClientTextViewModel(DbRecord server, ClientItemService client, GrfImageService images, EditCommandStack stack, SpriteLinkService? sprite = null)
+    public ClientTextViewModel(DbRecord server, ClientItemService client, GrfImageService images, EditCommandStack stack,
+        AppSettingsService settings, Func<string, string?>? skillResolver = null, SpriteLinkService? sprite = null)
     {
         _server = server;
         _client = client;
         _images = images;
         _sprite = sprite;
         _stack = stack;
+        _settings = settings;
+        _skill = skillResolver;
 
         int id = server.GetInt("Id");
 
@@ -115,6 +120,48 @@ public sealed partial class ClientTextViewModel : ObservableObject
             IdentifiedDisplayName = UnidentifiedDisplayName;
             IdentifiedDescription = UnidentifiedDescription;
         }
+    }
+
+    /// <summary>
+    /// Autocomplete: fills the identified display name + description (and slots/ClassNum) from the server
+    /// item record, type-aware and script-driven (heal amounts, weapon element, stat bonuses) per the
+    /// user's Autocomplete settings. For an official item with existing client text it restores the
+    /// canonical official name/description. Also applies the default unidentified description. One undo step.
+    /// </summary>
+    [RelayCommand]
+    private void Autocomplete()
+    {
+        var cfg = _settings.Settings.Autocomplete;
+        var gen = new ItemAutocomplete(cfg, _skill);
+
+        // Always regenerate the property block from server data, preserving any leading lore/flavor lines.
+        string newName = gen.DisplayName(_server);
+        var newDesc = gen.BuildDescription(_server, _entry.IdentifiedDescription);
+
+        using (_stack.BeginBatch("Autocomplete client text from server"))
+        {
+            if (cfg.OverwriteExisting || string.IsNullOrWhiteSpace(IdentifiedDisplayName))
+                IdentifiedDisplayName = newName;
+            if (cfg.OverwriteExisting || string.IsNullOrWhiteSpace(IdentifiedDescription))
+                IdentifiedDescription = string.Join(Environment.NewLine, newDesc);
+
+            // Slots / ClassNum always mirror the server (cross-file invariant).
+            SlotCount = _server.GetInt("Slots");
+            ClassNum = _server.GetInt("View");
+
+            // Default unidentified description.
+            if (cfg.DefaultUnidentifiedDescription.Length > 0 &&
+                (cfg.OverwriteExisting || string.IsNullOrWhiteSpace(UnidentifiedDescription)))
+                UnidentifiedDescription = cfg.DefaultUnidentifiedDescription;
+        }
+    }
+
+    /// <summary>Copies this item's client itemInfo entry as a Lua table block to the clipboard.</summary>
+    [RelayCommand]
+    private void CopyLua()
+    {
+        var lua = ItemInfoWriter.FormatEntry(_entry);
+        try { System.Windows.Clipboard.SetText(lua); } catch { /* clipboard busy */ }
     }
 
     public string IdentifiedDisplayName

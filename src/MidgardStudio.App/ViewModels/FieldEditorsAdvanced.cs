@@ -288,9 +288,47 @@ public sealed partial class ObjectListFieldEditorViewModel : FieldEditorViewMode
             () => { _list.Remove(record); Rows.Remove(row); _parent.IsDirty = true; RaiseChanged(); OnPropertyChanged(nameof(Summary)); }));
     }
 
+    /// <summary>Duplicates an entry (deep clone) and inserts the copy right after it. Undoable.</summary>
+    [RelayCommand]
+    private void DuplicateRow(ObjectRowViewModel? row)
+    {
+        row ??= SelectedRow;
+        if (!IsEditable || row is null) return;
+
+        var clone = row.Record.DeepClone();
+        clone.Owner = _parent;
+        var newRow = BuildRow(clone);
+        int index = _list.IndexOf(row.Record);
+        Stack.Execute(new ListMutateCommand(
+            $"{_parent.Schema.DisplayName}: duplicate {Label} row",
+            () =>
+            {
+                int i = Math.Clamp(index + 1, 0, _list.Count);
+                _list.Insert(i, clone);
+                Rows.Insert(Math.Clamp(index + 1, 0, Rows.Count), newRow);
+                SelectedRow = newRow; _parent.IsDirty = true; RaiseChanged(); OnPropertyChanged(nameof(Summary));
+            },
+            () =>
+            {
+                _list.Remove(clone); Rows.Remove(newRow);
+                _parent.IsDirty = true; RaiseChanged(); OnPropertyChanged(nameof(Summary));
+            }));
+    }
+
+    /// <summary>Copies an entry as a bare YAML mapping to the clipboard (read-only safe).</summary>
+    [RelayCommand]
+    private void CopyRowYaml(ObjectRowViewModel? row)
+    {
+        row ??= SelectedRow;
+        if (row is null) return;
+        var yaml = new Core.Serialization.YamlDbWriter().WriteRecord(row.Record);
+        try { System.Windows.Clipboard.SetText(yaml); } catch { /* clipboard busy */ }
+    }
+
     [RelayCommand]
     private void RemoveRow(ObjectRowViewModel? row)
     {
+        row ??= SelectedRow;
         if (!IsEditable || row is null) return;
         int index = _list.IndexOf(row.Record);
         Stack.Execute(new ListMutateCommand(

@@ -27,6 +27,32 @@ public sealed class YamlDbWriter
         return sb.ToString();
     }
 
+    /// <summary>Serializes a set of records as a complete import document (Header + Body) — used by the
+    /// list "Copy YAML" action so the clipboard text can be pasted straight into an import file.</summary>
+    public string WriteToString(DbSchema schema, IEnumerable<DbRecord> records)
+    {
+        var file = new DbFile { HeaderType = schema.HeaderType, HeaderVersion = schema.HeaderVersion };
+        file.Records.AddRange(records);
+        return WriteToString(schema, file);
+    }
+
+    /// <summary>Serializes a single record as a bare YAML mapping (no Header/Body wrapper), using the
+    /// record's own schema. Used to copy a nested sub-record (e.g. an item-group entry) to the clipboard.</summary>
+    public string WriteRecord(DbRecord record)
+    {
+        var sb = new StringBuilder();
+        using (var writer = new StringWriter(sb))
+        {
+            var emitter = new Emitter(writer, Settings);
+            emitter.Emit(new StreamStart());
+            emitter.Emit(new DocumentStart());
+            EmitRecord(emitter, record, record.Schema);
+            emitter.Emit(new DocumentEnd(isImplicit: true));
+            emitter.Emit(new StreamEnd());
+        }
+        return sb.ToString();
+    }
+
     public void WriteFile(string path, DbSchema schema, DbFile file)
     {
         var text = WriteToString(schema, file);

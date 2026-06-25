@@ -31,13 +31,35 @@
                            Margin="2,6,0,0" FontSize="11" />
                 <ListView x:Name="MasterList" ItemsSource="{Binding List.Rows}"
                           SelectedItem="{Binding List.SelectedRow, Mode=TwoWay}"
+                          SelectionMode="Extended"
+                          common:ListBehaviors.SelectedItems="{Binding List.SelectedRows}"
                           Background="Transparent" BorderThickness="0"
                           ItemContainerStyle="{StaticResource MasterListItem}"
                           VirtualizingPanel.IsVirtualizing="True"
                           VirtualizingPanel.VirtualizationMode="Recycling"
                           VirtualizingPanel.ScrollUnit="Pixel"
                           ScrollViewer.VerticalScrollBarVisibility="Visible"
-                          ScrollViewer.IsDeferredScrollingEnabled="False">
+                          ScrollViewer.IsDeferredScrollingEnabled="False"
+                          common:ListBehaviors.SelectOnRightClick="True">
+                    <ListView.InputBindings>
+                        <KeyBinding Key="A" Modifiers="Control+Shift" Command="{Binding AutocompleteSelectedCommand}" />
+                        <KeyBinding Key="C" Modifiers="Control" Command="{Binding CopyClientLuaCommand}" />
+                    </ListView.InputBindings>
+                    <ListView.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Autocomplete from server" InputGestureText="Ctrl+Shift+A"
+                                      Command="{Binding PlacementTarget.DataContext.AutocompleteSelectedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      ToolTip="Generate the identified name + description (type-aware, from server stats + script) plus slots / ClassNum. Select several (Ctrl/Shift+click) to run it in bulk.">
+                                <MenuItem.Icon><ui:SymbolIcon Symbol="Sparkle24" /></MenuItem.Icon>
+                            </MenuItem>
+                            <Separator />
+                            <MenuItem Header="Copy client Lua" InputGestureText="Ctrl+C"
+                                      Command="{Binding PlacementTarget.DataContext.CopyClientLuaCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      ToolTip="Copy this item's itemInfo Lua block to the clipboard">
+                                <MenuItem.Icon><ui:SymbolIcon Symbol="ClipboardLink24" /></MenuItem.Icon>
+                            </MenuItem>
+                        </ContextMenu>
+                    </ListView.ContextMenu>
                     <ListView.View>
                         <GridView>
                             <GridViewColumn Header="" Width="70">
@@ -79,8 +101,22 @@
                               Visibility="{Binding HasEditor, Converter={StaticResource BoolToVis}}">
                     <StackPanel DataContext="{Binding Editor}" TextElement.FontSize="12">
 
-                        <!-- Header -->
-                        <TextBlock Text="{Binding TargetLabel}" Opacity="0.7" FontSize="11.5" Margin="0,0,0,8" />
+                        <!-- Header: target label + autocomplete / copy actions -->
+                        <DockPanel Margin="0,0,0,10">
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                <ui:Button Content="Autocomplete" Appearance="Secondary" Padding="10,4"
+                                           Command="{Binding AutocompleteCommand}"
+                                           ToolTip="Generate the identified name + description (type-aware, from the server item's stats and script) plus slots / ClassNum (Ctrl+Shift+A)">
+                                    <ui:Button.Icon><ui:SymbolIcon Symbol="Sparkle24" /></ui:Button.Icon>
+                                </ui:Button>
+                                <ui:Button Content="Copy Lua" Appearance="Transparent" Padding="10,4" Margin="6,0,0,0"
+                                           Command="{Binding CopyLuaCommand}"
+                                           ToolTip="Copy this item's itemInfo Lua block to the clipboard (Ctrl+C)">
+                                    <ui:Button.Icon><ui:SymbolIcon Symbol="ClipboardLink24" /></ui:Button.Icon>
+                                </ui:Button>
+                            </StackPanel>
+                            <TextBlock Text="{Binding TargetLabel}" Opacity="0.7" FontSize="11.5" VerticalAlignment="Center" />
+                        </DockPanel>
 
                         <!-- Description toolbar (acts on the focused description box) -->
                         <ui:Card Padding="10,8" Margin="0,0,0,10">

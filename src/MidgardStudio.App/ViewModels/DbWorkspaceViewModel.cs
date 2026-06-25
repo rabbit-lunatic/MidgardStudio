@@ -153,13 +153,14 @@ public sealed partial class DbWorkspaceViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void SelectInClientItems()
     {
+        if (!IsItemDb) return;
         if (List?.SelectedRow is { } row) _navigate?.Invoke("client_items", row.Key);
     }
 
     [RelayCommand]
     private void AddInClientItems()
     {
-        if (_clientItems is null || List?.SelectedRow is not { } row) return;
+        if (!IsItemDb || _clientItems is null || List?.SelectedRow is not { } row) return;
         int id = (int)row.Key.AsInt;
         var entry = _clientItems.GetOrCreate(id);
         if (string.IsNullOrEmpty(entry.IdentifiedDisplayName))
@@ -176,14 +177,29 @@ public sealed partial class DbWorkspaceViewModel : ObservableObject, IDisposable
         return dlg.ShowDialog() == true ? dlg.Value : null;
     }
 
+    /// <summary>Copies the selected entry — or every selected entry when several are multi-selected —
+    /// as a complete import YAML document to the clipboard.</summary>
     [RelayCommand]
     private void CopyEntry()
     {
-        if (List?.SelectedRow is not { } row) return;
-        var file = new Core.Serialization.DbFile { HeaderType = _schema.HeaderType, HeaderVersion = _schema.HeaderVersion };
-        file.Records.Add(row.Record);
-        var yaml = new Core.Serialization.YamlDbWriter().WriteToString(_schema, file);
+        var records = SelectedRecords();
+        if (records.Count == 0) return;
+        var yaml = new Core.Serialization.YamlDbWriter().WriteToString(_schema, records);
         try { System.Windows.Clipboard.SetText(yaml); } catch { /* clipboard busy */ }
+        if (records.Count > 1) PortReportText = $"Copied {records.Count} entries as YAML to the clipboard.";
+    }
+
+    /// <summary>The records to act on for a copy: the multi-selection (in list order) when more than one
+    /// row is selected, otherwise just the single selected row.</summary>
+    private List<DbRecord> SelectedRecords()
+    {
+        if (List is null) return new List<DbRecord>();
+        if (List.SelectedRows.Count > 1)
+        {
+            var set = new HashSet<RecordRowViewModel>(List.SelectedRows);
+            return List.Rows.Where(set.Contains).Select(r => r.Record).ToList(); // preserve visible order
+        }
+        return List.SelectedRow is { } row ? new List<DbRecord> { row.Record } : new List<DbRecord>();
     }
 
     [ObservableProperty]

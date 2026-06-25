@@ -247,7 +247,7 @@ public partial class ShellViewModel : ObservableObject
 
         if (section?.Key == "client_items")
         {
-            _clientItemsVm ??= new ClientItemsViewModel(_session, _clientItems, _images, _sprite, _schemas.Get("item_db")!);
+            _clientItemsVm ??= new ClientItemsViewModel(_session, _clientItems, _images, _sprite, _appSettings, _schemas.Get("item_db")!);
             CurrentContent = _clientItemsVm;
             _ = _clientItemsVm.EnsureLoadedAsync();
             return;
@@ -517,14 +517,40 @@ public partial class ShellViewModel : ObservableObject
         "Undo" => UndoCommand,
         "Redo" => RedoCommand,
         "NewEntry" => NewEntryCommand,
+        "Duplicate" => DuplicateEntryCommand,
+        "CopyYaml" => CopyEntryYamlCommand,
         "Forge" => OpenForgeCommand,
         "FindInList" => FocusListSearchCommand,
         "FindEverywhere" => FindEverywhereCommand,
         "QuickOpen" => OpenPaletteCommand,
         "Reload" => ReloadDataCommand,
+        "Validate" => OpenValidationCommand,
+        "ToggleMode" => ToggleModeCommand,
+        "BackupManager" => OpenBackupManagerCommand,
+        "Settings" => OpenSettingsCommand,
         "Configuration" => OpenWizardCommand,
         _ => null,
     };
+
+    /// <summary>Duplicates the active workspace's selected entry (global shortcut). No-op off a DB screen.</summary>
+    [RelayCommand]
+    private void DuplicateEntry() => ActiveWorkspace?.DuplicateCommand.Execute(null);
+
+    /// <summary>Copies the active workspace's selected entry/entries as YAML (global shortcut).</summary>
+    [RelayCommand]
+    private void CopyEntryYaml() => ActiveWorkspace?.CopyEntryCommand.Execute(null);
+
+    /// <summary>Jumps to the cross-file validation screen and runs a check.</summary>
+    [RelayCommand]
+    private void OpenValidation()
+    {
+        GoSection("validation");
+        _validation.RunCommand.Execute(null);
+    }
+
+    /// <summary>Flips the active ruleset between Renewal and Pre-Renewal.</summary>
+    [RelayCommand]
+    private void ToggleMode() => IsRenewal = !IsRenewal;
 
     /// <summary>Raised when the user presses the "find in list" shortcut so the window can focus the search box.</summary>
     public event Action? FocusSearchRequested;

@@ -435,7 +435,38 @@
                              Background="Transparent" BorderThickness="0" Padding="2"
                              VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                             ScrollViewer.VerticalScrollBarVisibility="Auto">
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             common:ListBehaviors.SelectOnRightClick="True">
+                        <ListBox.InputBindings>
+                            <KeyBinding Key="Insert" Command="{Binding AddRowCommand}" />
+                            <KeyBinding Key="D" Modifiers="Control" Command="{Binding DuplicateRowCommand}"
+                                        CommandParameter="{Binding SelectedItem, RelativeSource={RelativeSource AncestorType=ListBox}}" />
+                            <KeyBinding Key="C" Modifiers="Control" Command="{Binding CopyRowYamlCommand}"
+                                        CommandParameter="{Binding SelectedItem, RelativeSource={RelativeSource AncestorType=ListBox}}" />
+                            <KeyBinding Key="Delete" Command="{Binding RemoveRowCommand}"
+                                        CommandParameter="{Binding SelectedItem, RelativeSource={RelativeSource AncestorType=ListBox}}" />
+                        </ListBox.InputBindings>
+                        <ListBox.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Add entry" InputGestureText="Ins"
+                                          Visibility="{Binding PlacementTarget.DataContext.IsEditable, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}"
+                                          Command="{Binding PlacementTarget.DataContext.AddRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
+                                    <MenuItem.Icon><ui:SymbolIcon Symbol="Add24" /></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="Duplicate" InputGestureText="Ctrl+D"
+                                          Visibility="{Binding PlacementTarget.DataContext.IsEditable, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}"
+                                          Command="{Binding PlacementTarget.DataContext.DuplicateRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <MenuItem Header="Copy YAML" InputGestureText="Ctrl+C"
+                                          Command="{Binding PlacementTarget.DataContext.CopyRowYamlCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <Separator Visibility="{Binding PlacementTarget.DataContext.IsEditable, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}" />
+                                <MenuItem Header="Remove" InputGestureText="Del"
+                                          Visibility="{Binding PlacementTarget.DataContext.IsEditable, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}"
+                                          Command="{Binding PlacementTarget.DataContext.RemoveRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            </ContextMenu>
+                        </ListBox.ContextMenu>
                         <ListBox.ItemContainerStyle>
                             <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
                                 <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -575,23 +606,31 @@
 
     <!-- Cross-file validation panel -->
     <DataTemplate DataType="{x:Type vm:ValidationViewModel}">
-        <DockPanel>
-            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
-                <ui:Button Content="Run validation" Appearance="Primary" Command="{Binding RunCommand}" />
-                <TextBlock Text="{Binding Summary}" VerticalAlignment="Center" Opacity="0.75" Margin="12,0,0,0" />
-            </StackPanel>
-            <ListView ItemsSource="{Binding Issues}">
-                <ListView.View>
-                    <GridView>
-                        <GridViewColumn Header="Severity" Width="80" DisplayMemberBinding="{Binding Severity}" />
-                        <GridViewColumn Header="Database" Width="110" DisplayMemberBinding="{Binding DbId}" />
-                        <GridViewColumn Header="Key" Width="80" DisplayMemberBinding="{Binding Key}" />
-                        <GridViewColumn Header="Field" Width="90" DisplayMemberBinding="{Binding Field}" />
-                        <GridViewColumn Header="Message" Width="640" DisplayMemberBinding="{Binding Message}" />
-                    </GridView>
-                </ListView.View>
-            </ListView>
-        </DockPanel>
+        <Border Background="{StaticResource ScriptEditorBackground}" CornerRadius="8" Padding="16,14">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="Cross-file validation" Style="{StaticResource TitleSection}" Margin="0,0,0,10" />
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,12">
+                    <ui:Button Content="Run validation" Appearance="Primary" Command="{Binding RunCommand}">
+                        <ui:Button.Icon><ui:SymbolIcon Symbol="CheckmarkCircle24" /></ui:Button.Icon>
+                    </ui:Button>
+                    <TextBlock Text="{Binding Summary}" VerticalAlignment="Center" Foreground="#C9C9DB" Margin="12,0,0,0" />
+                </StackPanel>
+                <Border BorderBrush="#1FFFFFFF" BorderThickness="1" CornerRadius="6" Background="#0AFFFFFF">
+                    <ListView ItemsSource="{Binding Issues}" Background="Transparent" BorderThickness="0"
+                              Foreground="#E8E8F2" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Header="Severity" Width="80" DisplayMemberBinding="{Binding Severity}" />
+                                <GridViewColumn Header="Database" Width="110" DisplayMemberBinding="{Binding DbId}" />
+                                <GridViewColumn Header="Key" Width="80" DisplayMemberBinding="{Binding Key}" />
+                                <GridViewColumn Header="Field" Width="90" DisplayMemberBinding="{Binding Field}" />
+                                <GridViewColumn Header="Message" Width="640" DisplayMemberBinding="{Binding Message}" />
+                            </GridView>
+                        </ListView.View>
+                    </ListView>
+                </Border>
+            </DockPanel>
+        </Border>
     </DataTemplate>
 
     <!-- Monster client sprite registration -->
@@ -702,6 +741,11 @@
                           ItemContainerStyle="{StaticResource DropItemStyle}"
                           common:ListBehaviors.SelectOnRightClick="True">
                     <ListView.InputBindings>
+                        <KeyBinding Key="Insert" Command="{Binding AddDropCommand}" />
+                        <KeyBinding Key="F2" Command="{Binding EditDropCommand}"
+                                    CommandParameter="{Binding SelectedItem, RelativeSource={RelativeSource AncestorType=ListView}}" />
+                        <KeyBinding Key="G" Modifiers="Control" Command="{Binding SelectItemCommand}"
+                                    CommandParameter="{Binding SelectedItem, RelativeSource={RelativeSource AncestorType=ListView}}" />
                         <KeyBinding Key="Delete" Command="{Binding RemoveDropCommand}"
                                     CommandParameter="{Binding SelectedItem, RelativeSource={RelativeSource AncestorType=ListView}}" />
                         <KeyBinding Key="C" Modifiers="Control" Command="{Binding CopyDropCommand}"
@@ -710,11 +754,11 @@
                     </ListView.InputBindings>
                     <ListView.ContextMenu>
                         <ContextMenu>
-                            <MenuItem Header="Select item in DB"
+                            <MenuItem Header="Select item in DB" InputGestureText="Ctrl+G"
                                       Visibility="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource NotNullToVis}}"
                                       Command="{Binding PlacementTarget.DataContext.SelectItemCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                       CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                            <MenuItem Header="Edit chance"
+                            <MenuItem Header="Edit chance" InputGestureText="F2"
                                       Visibility="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource NotNullToVis}}"
                                       Command="{Binding PlacementTarget.DataContext.EditDropCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                       CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
@@ -729,7 +773,7 @@
                             <Separator Visibility="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource NotNullToVis}}" />
                             <MenuItem Header="Paste" InputGestureText="Ctrl+V"
                                       Command="{Binding PlacementTarget.DataContext.PasteDropCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                            <MenuItem Header="Add drop"
+                            <MenuItem Header="Add drop" InputGestureText="Ins"
                                       Command="{Binding PlacementTarget.DataContext.AddDropCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                         </ContextMenu>
                     </ListView.ContextMenu>
@@ -801,16 +845,22 @@
                               ItemContainerStyle="{StaticResource DropItemStyle}"
                               common:ListBehaviors.SelectOnRightClick="True">
                         <ListView.InputBindings>
+                            <KeyBinding Key="Insert" Command="{Binding AddNormalDropCommand}" />
+                            <KeyBinding Key="Insert" Modifiers="Control" Command="{Binding AddMvpDropCommand}" />
+                            <KeyBinding Key="F2" Command="{Binding EditChanceCommand}"
+                                        CommandParameter="{Binding SelectedItem, RelativeSource={RelativeSource AncestorType=ListView}}" />
+                            <KeyBinding Key="G" Modifiers="Control" Command="{Binding SelectMobCommand}"
+                                        CommandParameter="{Binding SelectedItem, RelativeSource={RelativeSource AncestorType=ListView}}" />
                             <KeyBinding Key="Delete" Command="{Binding RemoveDropCommand}"
                                         CommandParameter="{Binding SelectedItem, RelativeSource={RelativeSource AncestorType=ListView}}" />
                         </ListView.InputBindings>
                         <ListView.ContextMenu>
                             <ContextMenu>
-                                <MenuItem Header="Select monster"
+                                <MenuItem Header="Select monster" InputGestureText="Ctrl+G"
                                           Visibility="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource NotNullToVis}}"
                                           Command="{Binding PlacementTarget.DataContext.SelectMobCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                           CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                                <MenuItem Header="Edit chance"
+                                <MenuItem Header="Edit chance" InputGestureText="F2"
                                           Visibility="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource NotNullToVis}}"
                                           Command="{Binding PlacementTarget.DataContext.EditChanceCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                           CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
@@ -819,9 +869,9 @@
                                           Command="{Binding PlacementTarget.DataContext.RemoveDropCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                           CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                                 <Separator Visibility="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource NotNullToVis}}" />
-                                <MenuItem Header="Add normal drop"
+                                <MenuItem Header="Add normal drop" InputGestureText="Ins"
                                           Command="{Binding PlacementTarget.DataContext.AddNormalDropCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                                <MenuItem Header="Add MVP drop"
+                                <MenuItem Header="Add MVP drop" InputGestureText="Ctrl+Ins"
                                           Command="{Binding PlacementTarget.DataContext.AddMvpDropCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                             </ContextMenu>
                         </ListView.ContextMenu>

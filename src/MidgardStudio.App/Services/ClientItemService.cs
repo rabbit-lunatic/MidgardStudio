@@ -63,6 +63,10 @@ public sealed class ClientItemService
 
     public bool IsOfficial(int id) => Official.Contains(id);
 
+    /// <summary>The official/base client entry for an id (a deep copy), or null when the item isn't an
+    /// official one. Lets Autocomplete restore canonical client text instead of synthesizing.</summary>
+    public ItemInfoEntry? OfficialEntry(int id) => Official.Entry(id)?.Clone();
+
     public ItemInfoTarget TargetFor(int id) => Official.Contains(id) ? ItemInfoTarget.Override : ItemInfoTarget.Custom;
 
     public bool Has(int id) => ClientFile.Custom.ContainsKey(id) || ClientFile.Override.ContainsKey(id) || Official.Contains(id);

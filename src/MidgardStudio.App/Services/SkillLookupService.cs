@@ -17,12 +17,29 @@ public sealed class SkillLookupService
     private readonly WorkspaceSession _session;
     private readonly SchemaRegistry _schemas;
     private List<SkillEntry>? _cache;
+    private Dictionary<string, string>? _byAegis;
 
     public SkillLookupService(WorkspaceSession session, SchemaRegistry schemas)
     {
         _session = session;
         _schemas = schemas;
-        _session.WorkspaceReloaded += () => _cache = null;
+        _session.WorkspaceReloaded += () => { _cache = null; _byAegis = null; };
+    }
+
+    /// <summary>The display name for a skill AegisName (e.g. "MG_FIREBOLT" → "Fire Bolt"), or null if unknown.</summary>
+    public string? Display(string? aegis)
+    {
+        if (string.IsNullOrWhiteSpace(aegis)) return null;
+        _byAegis ??= BuildIndex();
+        return _byAegis.TryGetValue(aegis!.Trim(), out var d) ? d : null;
+    }
+
+    private Dictionary<string, string> BuildIndex()
+    {
+        var d = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var s in All())
+            if (!string.IsNullOrEmpty(s.Aegis)) d[s.Aegis] = s.Display;
+        return d;
     }
 
     private IReadOnlyList<SkillEntry> All()

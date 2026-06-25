@@ -37,6 +37,10 @@ public sealed partial class DbListViewModel : ObservableObject
 
     public RangeObservableCollection<RecordRowViewModel> Rows { get; } = new();
 
+    /// <summary>The currently multi-selected rows (mirrored from the list via <c>ListBehaviors.SelectedItems</c>);
+    /// used for bulk "Copy YAML". Empty/one-element for lists that don't enable multi-select.</summary>
+    public System.Collections.ObjectModel.ObservableCollection<RecordRowViewModel> SelectedRows { get; } = new();
+
     [ObservableProperty]
     private string _searchText = string.Empty;
 

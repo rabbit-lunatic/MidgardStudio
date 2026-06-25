@@ -26,6 +26,9 @@ public sealed class AppSettings
 
     /// <summary>How many dated backup snapshots to keep per profile before the oldest are pruned.</summary>
     public int BackupRetention { get; set; } = 30;
+
+    /// <summary>Options for the client-item Autocomplete generator.</summary>
+    public MidgardStudio.Core.Lua.AutocompleteConfig Autocomplete { get; set; } = new();
 }
 
 /// <summary>Loads/saves <see cref="AppSettings"/> as JSON in %APPDATA%\Midgard Studio.</summary>
@@ -38,11 +41,17 @@ public sealed class AppSettingsService
         ("Undo", "Undo", "Ctrl+Z"),
         ("Redo", "Redo", "Ctrl+Y"),
         ("NewEntry", "New entry", "Ctrl+N"),
+        ("Duplicate", "Duplicate entry", "Ctrl+D"),
+        ("CopyYaml", "Copy entry as YAML", "Ctrl+Shift+C"),
         ("Forge", "Forge new item", "Ctrl+Shift+N"),
         ("FindInList", "Find in current list", "Ctrl+F"),
         ("FindEverywhere", "Find in all databases", "Ctrl+Shift+F"),
         ("QuickOpen", "Quick open", "Ctrl+K"),
         ("Reload", "Reload database", "F5"),
+        ("Validate", "Run validation", "F6"),
+        ("ToggleMode", "Toggle Renewal / Pre-Renewal", "Ctrl+M"),
+        ("BackupManager", "Backup manager", "Ctrl+Shift+B"),
+        ("Settings", "Settings", "Ctrl+Shift+OemComma"),
         ("Configuration", "Profiles & configuration", "Ctrl+OemComma"),
     };
 
