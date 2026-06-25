@@ -32,6 +32,10 @@ coverage*.json
 coverage*.xml
 coverage*.info
 
+# ---- Stray temp / tool scratch ----
+tmp/
+comp_x64.dll
+
 # ---- Local / OS ----
 .DS_Store
 Thumbs.db
