@@ -153,8 +153,9 @@
                                 Title="Validation" Message="{Binding Editor.RecordIssuesText}"
                                 IsOpen="{Binding Editor.HasRecordIssues}" />
 
-                    <!-- Client sprite registration (mobs only) -->
-                    <ui:CardExpander DockPanel.Dock="Bottom" Header="Client sprite" IsExpanded="True"
+                    <!-- Client sprite registration (mobs only). Folded by default so it doesn't push the
+                         drop table out of view; the user can expand it when they need to register a sprite. -->
+                    <ui:CardExpander DockPanel.Dock="Bottom" Header="Client sprite" IsExpanded="False"
                                      Margin="0,8,0,0"
                                      Visibility="{Binding SideEditor, Converter={StaticResource NotNullToVis}}">
                         <ContentControl Content="{Binding SideEditor}" />
