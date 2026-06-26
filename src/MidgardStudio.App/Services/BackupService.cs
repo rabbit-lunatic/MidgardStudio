@@ -141,8 +141,19 @@ public sealed class BackupService
         // half-copied data (List() treats a folder without a manifest as not-a-backup).
         string manifestPath = Path.Combine(dest, "manifest.json");
         string manifestTmp = manifestPath + ".tmp";
-        File.WriteAllText(manifestTmp, JsonSerializer.Serialize(entry, JsonOptions));
-        File.Move(manifestTmp, manifestPath);
+        try
+        {
+            File.WriteAllText(manifestTmp, JsonSerializer.Serialize(entry, JsonOptions));
+            File.Move(manifestTmp, manifestPath);
+        }
+        catch
+        {
+            // A failed manifest write would leave a snapshot folder with no manifest (List() ignores it) plus
+            // an orphaned .tmp — remove both so the backups folder doesn't accumulate junk, then surface it.
+            try { if (File.Exists(manifestTmp)) File.Delete(manifestTmp); } catch { /* best effort */ }
+            try { Directory.Delete(dest, true); } catch { /* best effort */ }
+            throw;
+        }
 
         Prune();
         return entry;

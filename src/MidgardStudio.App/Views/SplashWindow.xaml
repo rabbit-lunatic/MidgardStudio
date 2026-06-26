@@ -9,7 +9,7 @@
     <!-- Branded, animated splash. Self-contained (it runs on its own UI thread while the main thread loads
          the workspace) so it defines all of its own brushes/animations and shares nothing with App resources. -->
     <Border x:Name="Card" Margin="30" CornerRadius="18" BorderThickness="1" BorderBrush="#3FA15CF5"
-            Opacity="0" RenderTransformOrigin="0.5,0.5">
+            Opacity="0" RenderTransformOrigin="0.5,0.5" ClipToBounds="True">
         <Border.Background>
             <RadialGradientBrush GradientOrigin="0.5,0.28" Center="0.5,0.32" RadiusX="0.95" RadiusY="1.1">
                 <GradientStop Color="#26193F" Offset="0.0" />

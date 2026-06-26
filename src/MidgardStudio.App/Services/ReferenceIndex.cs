@@ -22,6 +22,9 @@ public sealed class ReferenceIndex : IReferenceIndex
         _schemas = schemas;
         _session.WorkspaceReloaded += Invalidate;
         _session.ModeChanged += Invalidate;
+        // A record add/edit/delete/undo/redo can change the set of valid reference names, so drop the cache
+        // on any command-stack change. This lets the validator reuse the cache between no-edit scans.
+        _session.Commands.Changed += Invalidate;
     }
 
     public void Invalidate()

@@ -16,8 +16,6 @@ public sealed class RecordRowViewModel : ObservableObject
     private readonly string _keyField;
     private readonly string _displayField;
     private readonly Func<RecordKey, ImageSource?>? _iconResolver;
-    private ImageSource? _icon;
-    private bool _iconResolved;
 
     // Searchable text is stable between keystrokes, so resolve it through the overlay once and cache it.
     // The filter pass then does plain string compares instead of dictionary lookups + a fresh
@@ -37,15 +35,10 @@ public sealed class RecordRowViewModel : ObservableObject
 
     public RecordKey Key { get; }
 
-    /// <summary>Lazily-resolved list icon (items only); null for databases without one.</summary>
-    public ImageSource? Icon
-    {
-        get
-        {
-            if (!_iconResolved) { _iconResolved = true; _icon = _iconResolver?.Invoke(Key); }
-            return _icon;
-        }
-    }
+    /// <summary>List icon (items only); null for databases without one. Resolved on demand through the
+    /// (cached) resolver so off-screen rows don't pin a bitmap for the whole session — the GrfImageService
+    /// cache bounds retention instead.</summary>
+    public ImageSource? Icon => _iconResolver?.Invoke(Key);
 
     public DbRecord Record => _table.GetEffective(Key)!;
 
@@ -68,8 +61,8 @@ public sealed class RecordRowViewModel : ObservableObject
     /// <summary>Refresh all bindings (after an edit/override changes the effective record).</summary>
     public void Refresh()
     {
-        _iconResolved = false; // re-resolve the icon (resource name may have changed)
         _keyText = _aegisName = _name = _typeText = null; // drop cached text so it re-reads the overlay
+        // Icon is resolved on demand, so OnPropertyChanged below re-queries it (resource name may have changed).
         OnPropertyChanged(string.Empty);
     }
 }

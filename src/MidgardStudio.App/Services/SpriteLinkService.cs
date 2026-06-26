@@ -36,6 +36,15 @@ public sealed class SpriteLinkService
         catch { return false; }
     }
 
+    /// <summary>All View ids mapped in accessoryid.lub, parsed once — use this for a bulk check instead of
+    /// calling <see cref="HasView"/> per item (which re-reads + re-parses the file).</summary>
+    public HashSet<int> MappedViewIds()
+    {
+        if (!File.Exists(AccIdPath)) return new HashSet<int>();
+        try { return new HashSet<int>(AccessoryTables.ReadConstants(_codec.ReadText(AccIdPath)).Values); }
+        catch { return new HashSet<int>(); }
+    }
+
     /// <summary>The sprite file mapped to a View id (via accessoryid.lub + accname.lub), or null.</summary>
     public string? SpriteForView(int viewId)
     {

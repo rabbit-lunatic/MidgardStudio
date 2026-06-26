@@ -128,11 +128,13 @@ public sealed class YamlDbReader
         switch (field.Kind)
         {
             case FieldKind.Int:
-                if (raw is not string) return false;
-                value = ParseInt((string)raw); return true;
+                if (raw is not string ints || !int.TryParse(ints, NumberStyles.Integer, CultureInfo.InvariantCulture, out var iv))
+                    return false; // unparseable -> preserve verbatim in Extras instead of silently coercing to 0
+                value = iv; return true;
             case FieldKind.Long:
-                if (raw is not string) return false;
-                value = long.TryParse((string)raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var l) ? l : 0L; return true;
+                if (raw is not string longs || !long.TryParse(longs, NumberStyles.Integer, CultureInfo.InvariantCulture, out var l))
+                    return false;
+                value = l; return true;
             case FieldKind.Bool:
                 if (raw is not string) return false;
                 value = ParseBool((string)raw); return true;
@@ -159,19 +161,23 @@ public sealed class YamlDbReader
                 value = new List<object?>(sl); return true;
             case FieldKind.LevelInt:
                 if (raw is not string && raw is not List<object?>) return false;
-                value = ReadLevel(raw, field); return true;
+                var level = ReadLevel(raw, field, out var levelComplete);
+                if (!levelComplete) return false; // a malformed per-level entry -> preserve the raw value in Extras
+                value = level; return true;
             default:
                 if (raw is not string) return false;
                 value = (string)raw; return true;
         }
     }
 
-    private static LevelList ReadLevel(object raw, FieldSchema field)
+    private static LevelList ReadLevel(object raw, FieldSchema field, out bool complete)
     {
         var list = new LevelList();
+        complete = true;
         if (raw is string s)
         {
             if (int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v)) list.Scalar = v;
+            else complete = false; // non-numeric scalar -> let the caller preserve it verbatim
         }
         else if (raw is List<object?> seq)
         {
@@ -181,6 +187,8 @@ public sealed class YamlDbReader
                     && m.TryGetValue("Level", out var lo) && int.TryParse(lo as string, NumberStyles.Integer, CultureInfo.InvariantCulture, out var lvl)
                     && m.TryGetValue(field.LevelValueKey, out var vo) && int.TryParse(vo as string, NumberStyles.Integer, CultureInfo.InvariantCulture, out var val))
                     list.Levels.Add(new LevelEntry(lvl, val));
+                else
+                    complete = false; // an entry didn't match {Level, <valueKey>} -> preserve the whole raw list
             }
         }
         return list;
@@ -213,9 +221,6 @@ public sealed class YamlDbReader
         }
         return list;
     }
-
-    private static int ParseInt(string? s) =>
-        int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : 0;
 
     private static bool ParseBool(string? s) =>
         s is not null && (s.Equals("true", StringComparison.OrdinalIgnoreCase) || s == "1");

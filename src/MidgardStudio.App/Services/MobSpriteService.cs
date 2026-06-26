@@ -34,6 +34,14 @@ public sealed class MobSpriteService
         return constants.FirstOrDefault(kv => kv.Value == mobId).Key;
     }
 
+    /// <summary>All mob ids already registered in npcidentity.lub (jobtbl), parsed once — use this for a
+    /// bulk check instead of calling <see cref="FindConstantForMob"/> per mob (which re-reads the file).</summary>
+    public HashSet<int> RegisteredMobIds()
+    {
+        if (!File.Exists(NpcIdentityPath)) return new HashSet<int>();
+        return new HashSet<int>(AccessoryTables.ReadConstants(_codec.ReadText(NpcIdentityPath), "jobtbl").Values);
+    }
+
     public MobSpriteResult RegisterMob(int mobId, string aegisName, string spriteName)
     {
         string idText = _codec.ReadText(NpcIdentityPath);

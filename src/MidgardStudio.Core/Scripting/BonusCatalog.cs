@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using MidgardStudio.Core.Schema;
 
@@ -237,8 +238,9 @@ public static class BonusCatalog
         {
             var p = def.Params[i];
             string raw = i < values.Count && !string.IsNullOrWhiteSpace(values[i]) ? values[i].Trim() : p.Default;
-            if (p.Kind == BonusParamKind.Number && p.Scale != 1 && int.TryParse(raw, out var n))
-                raw = (n * p.Scale).ToString();
+            if (p.Kind == BonusParamKind.Number && p.Scale != 1
+                && int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n))
+                raw = (n * p.Scale).ToString(CultureInfo.InvariantCulture);
             sb.Append(',').Append(raw);
         }
         return sb.Append(';').ToString();

@@ -100,15 +100,19 @@ public sealed class AppSettingsService
 
     public void Save()
     {
+        // Atomic write so a crash mid-save can't truncate the settings file.
+        var tmp = _path + ".tmp";
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-            // Atomic write so a crash mid-save can't truncate the settings file.
-            var tmp = _path + ".tmp";
             File.WriteAllText(tmp, JsonSerializer.Serialize(Settings, Json));
             if (File.Exists(_path)) File.Replace(tmp, _path, null);
             else File.Move(tmp, _path);
         }
-        catch { /* best effort */ }
+        catch
+        {
+            // Don't leave a half-written .tmp behind in %APPDATA% if the replace/move failed.
+            try { if (File.Exists(tmp)) File.Delete(tmp); } catch { /* best effort */ }
+        }
     }
 }

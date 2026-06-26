@@ -39,7 +39,8 @@ public sealed class WorkspaceValidator
     /// <summary>Runs the full workspace scan and returns a structured report. Safe to call off the UI thread.</summary>
     public ValidationReport Validate(ValidationScope scope = ValidationScope.CustomOnly)
     {
-        _references.Invalidate(); // take a fresh snapshot of reference names for this scan
+        // The reference index self-invalidates on edit / undo / reload / mode change, so consecutive scans
+        // with no edits in between reuse the cached name sets instead of rebuilding every run.
         var ctx = CurrentContext();
         var issues = new List<ValidationIssue>();
 
@@ -64,7 +65,6 @@ public sealed class WorkspaceValidator
     /// only cares about what is about to be written — far cheaper than a whole-workspace scan.</summary>
     public ValidationReport ValidateDatabases(IEnumerable<string> dbIds, ValidationScope scope = ValidationScope.CustomOnly)
     {
-        _references.Invalidate();
         var ctx = CurrentContext();
         var issues = new List<ValidationIssue>();
         var wanted = new HashSet<string>(dbIds, StringComparer.Ordinal);
@@ -90,6 +90,9 @@ public sealed class WorkspaceValidator
     {
         if (_schemas.Get("item_db") is not { } schema) return;
         var overlay = _session.GetActiveOverlay(schema);
+
+        // Parse the accessory view map ONCE for the whole pass (HasView re-read + re-parsed the lua per item).
+        var mappedViews = _sprite.IsAvailable ? _sprite.MappedViewIds() : new HashSet<int>();
 
         foreach (var rec in overlay.Effective())
         {
@@ -144,7 +147,7 @@ public sealed class WorkspaceValidator
                     $"Inventory icon '{entry.IdentifiedResourceName}.bmp' not found in the configured GRF.")
                 { RuleId = "XFILE.ICON_MISSING" });
 
-            if (isHeadgear && view > 0 && _sprite.IsAvailable && !_sprite.HasView(view))
+            if (isHeadgear && view > 0 && _sprite.IsAvailable && !mappedViews.Contains(view))
                 issues.Add(new ValidationIssue(ValidationSeverity.Warning, "item_db", key, "View",
                     $"Headgear View {view} is not mapped in accessoryid.lub / accname.lub — the sprite won't show.")
                 { RuleId = "XFILE.HEADGEAR_NO_ACCMAP" });
@@ -156,11 +159,14 @@ public sealed class WorkspaceValidator
         if (_schemas.Get("mob_db") is not { } schema || !_mobSprite.IsAvailable) return;
         var overlay = _session.GetActiveOverlay(schema);
 
+        // Parse the registered mob ids ONCE (this used to re-read + re-parse a 142 KB lua file per mob).
+        var registered = _mobSprite.RegisteredMobIds();
+
         foreach (var rec in overlay.Effective())
         {
             if (scope == ValidationScope.CustomOnly && rec.Origin == RecordOrigin.Base) continue;
             int id = rec.GetInt("Id");
-            if (_mobSprite.FindConstantForMob(id) is not null) continue;
+            if (registered.Contains(id)) continue;
 
             string aegis = rec.GetString("AegisName") ?? string.Empty;
             issues.Add(new ValidationIssue(ValidationSeverity.Warning, "mob_db", id.ToString(), "sprite",

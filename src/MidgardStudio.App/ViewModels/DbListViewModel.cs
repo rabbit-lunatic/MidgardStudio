@@ -182,7 +182,10 @@ public sealed partial class DbListViewModel : ObservableObject
         {
             await Task.Delay(140, cts.Token); // debounce
             string q = query.Trim();
-            List<RecordRowViewModel> matched = await Task.Run(() => _all.Where(r => Pass(r, q)).ToList(), cts.Token);
+            // Snapshot on the UI thread (we're back on it after the debounce) so the background filter can't
+            // race a concurrent edit/add/delete/sort mutating _all and throw "collection modified".
+            var snapshot = _all.ToArray();
+            List<RecordRowViewModel> matched = await Task.Run(() => snapshot.Where(r => Pass(r, q)).ToList(), cts.Token);
 
             if (cts.Token.IsCancellationRequested) return;
 
@@ -195,6 +198,10 @@ public sealed partial class DbListViewModel : ObservableObject
         catch (TaskCanceledException)
         {
             // superseded by a newer keystroke — ignore
+        }
+        catch (InvalidOperationException)
+        {
+            // a concurrent list mutation raced the filter despite the snapshot — the next keystroke re-runs it
         }
     }
 

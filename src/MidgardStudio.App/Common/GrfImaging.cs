@@ -8,7 +8,10 @@ namespace MidgardStudio.App.Common;
 /// <summary>Converts a decoded <see cref="GrfImage"/> into a WPF <see cref="ImageSource"/>.</summary>
 public static class GrfImaging
 {
-    public static ImageSource? ToImageSource(GrfImage? image)
+    /// <param name="decodePixelWidth">For encoded (png/jpg/…) images, decode at this width instead of full
+    /// resolution — used for thumbnails to avoid decoding large illustrations at full size. Ignored by the
+    /// raw-pixel paths (they're already small icons/sprites).</param>
+    public static ImageSource? ToImageSource(GrfImage? image, int? decodePixelWidth = null)
     {
         if (image is null || image.Pixels is null || image.Pixels.Length == 0) return null;
 
@@ -28,7 +31,7 @@ public static class GrfImaging
                     // whose width isn't a multiple of 4 (e.g. 75-wide collection illustrations).
                     return IndexedToBgra32(image.Width, image.Height, image.Pixels, image.Palette);
                 default:
-                    return FromEncodedBytes(image.Pixels); // NotEvaluated*: raw png/jpg/bmp/tga bytes
+                    return FromEncodedBytes(image.Pixels, decodePixelWidth); // NotEvaluated*: raw png/jpg/bmp/tga bytes
             }
         }
         catch
@@ -70,7 +73,7 @@ public static class GrfImaging
         return Frozen(w, h, PixelFormats.Bgra32, null, bgra, w * 4);
     }
 
-    private static ImageSource? FromEncodedBytes(byte[] bytes)
+    private static ImageSource? FromEncodedBytes(byte[] bytes, int? decodePixelWidth = null)
     {
         try
         {
@@ -78,6 +81,7 @@ public static class GrfImaging
             using var ms = new MemoryStream(bytes);
             image.BeginInit();
             image.CacheOption = BitmapCacheOption.OnLoad;
+            if (decodePixelWidth is > 0) image.DecodePixelWidth = decodePixelWidth.Value; // downscale at decode for thumbnails
             image.StreamSource = ms;
             image.EndInit();
             image.Freeze();

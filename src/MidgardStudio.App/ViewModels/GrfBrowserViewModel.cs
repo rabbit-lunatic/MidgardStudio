@@ -347,12 +347,14 @@ public sealed partial class GrfBrowserViewModel : ObservableObject
         RebuildItems();
     }
 
+    private const int ThumbDecodeWidth = 96; // decode encoded thumbnails small instead of at full resolution
+
     private ImageSource? ResolveThumb(GrfItem item)
     {
         if (item.Ext == ".gat") return GrfImaging.ToImageSource(_grf.GatPreview(item.FullPath));
         string path = item.FullPath;
         if (item.Ext == ".act") path = Path.ChangeExtension(path, ".spr");
-        try { return GrfImaging.ToImageSource(_grf.BrowseImage(path)); }
+        try { return GrfImaging.ToImageSource(_grf.BrowseImage(path), ThumbDecodeWidth); }
         catch { return null; }
     }
 
@@ -457,7 +459,7 @@ public sealed partial class GrfBrowserViewModel : ObservableObject
         foreach (var p in info.Properties) InfoRows.Add(new InfoRow(p.Key, p.Value));
         foreach (var item in info.Items.Take(200)) InfoItems.Add(item);
         foreach (var tex in info.Textures.Take(120))
-            Thumbs.Add(new GrfThumb(Path.GetFileName(tex), tex, p => GrfImaging.ToImageSource(_grf.BrowseImage(p))));
+            Thumbs.Add(new GrfThumb(Path.GetFileName(tex), tex, p => GrfImaging.ToImageSource(_grf.BrowseImage(p), ThumbDecodeWidth)));
         ShowInfo = true;
     }
 

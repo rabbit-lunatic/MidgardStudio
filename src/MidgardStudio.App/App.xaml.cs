@@ -64,6 +64,14 @@ public partial class App : Application
 
         DispatcherUnhandledException += OnDispatcherUnhandledException;
 
+        // Fire-and-forget loads (EnsureLoadedAsync etc.) shouldn't be able to fail silently — log any
+        // task exception nobody awaited so corrupt-data failures are never invisible.
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            Log.Error(args.Exception, "Unobserved task exception");
+            args.SetObserved();
+        };
+
         ApplicationThemeManager.Apply(ApplicationTheme.Dark);
 
         // Show the animated splash on its own UI thread, then build the shell (which loads the workspace
@@ -152,10 +160,22 @@ public partial class App : Application
         services.AddSingleton<MainWindow>();
     }
 
+    private string? _lastErrorMessage;
+    private long _lastErrorTick;
+
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         Log.Error(e.Exception, "Unhandled dispatcher exception");
         // A data editor must not die to a stray exception and take the unsaved session with it.
+        e.Handled = true;
+
+        // Throttle the dialog: a recurring fault (a per-frame render or binding error) would otherwise spawn
+        // an endless stream of identical blocking modals. Show the same message at most once per 5 seconds.
+        long now = Environment.TickCount64;
+        if (e.Exception.Message == _lastErrorMessage && now - _lastErrorTick < 5000) return;
+        _lastErrorMessage = e.Exception.Message;
+        _lastErrorTick = now;
+
         try
         {
             Views.ConfirmDialog.Alert("Unexpected error",
@@ -163,7 +183,6 @@ public partial class App : Application
                 e.Exception.Message);
         }
         catch { /* never let the error handler itself bring the app down */ }
-        e.Handled = true;
     }
 
     protected override void OnExit(ExitEventArgs e)

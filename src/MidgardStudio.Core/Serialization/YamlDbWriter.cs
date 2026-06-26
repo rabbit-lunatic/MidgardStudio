@@ -17,7 +17,8 @@ namespace MidgardStudio.Core.Serialization;
 public sealed class YamlDbWriter
 {
     private static readonly EmitterSettings Settings =
-        EmitterSettings.Default.WithBestIndent(2).WithBestWidth(int.MaxValue).WithIndentedSequences();
+        EmitterSettings.Default.WithBestIndent(2).WithBestWidth(int.MaxValue).WithIndentedSequences()
+            .WithNewLine("\n"); // LF to match rAthena's base files (avoid CRLF diff churn)
 
     public string WriteToString(DbSchema schema, DbFile file)
     {

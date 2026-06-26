@@ -24,6 +24,14 @@ public sealed class ScriptInsights
 /// </summary>
 public static class ItemScriptParser
 {
+    static ItemScriptParser()
+    {
+        // This parser matches ~30 distinct inline patterns — more than the process-wide static Regex cache
+        // default (15) — so without this each call recompiled evicted patterns. Raising the cache keeps every
+        // pattern compiled-once-and-reused, fixing the thrash with no risk of mis-transcribing a pattern.
+        if (Regex.CacheSize < 64) Regex.CacheSize = 64;
+    }
+
     private static readonly Regex Complex = new(
         @"autobonus|getrefine|callfunc|\bif\b|\belse\b|\bfor\b|\bwhile\b|\.@|\bset\b|\bgetitem\b|\bskilleffect\b|\bpetloot\b|\bhealpercent\b",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);

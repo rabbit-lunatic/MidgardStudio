@@ -127,8 +127,19 @@ public sealed partial class ComboEditorViewModel : ObservableObject, IDisposable
     {
         if (_overlay is not null) return;
         IsLoading = true;
-        var modeSet = await Task.Run(() => _session.GetModeSet(_schema));
-        _overlay = modeSet.For(_session.Mode);
+        try
+        {
+            var modeSet = await Task.Run(() => _session.GetModeSet(_schema));
+            _overlay = modeSet.For(_session.Mode);
+        }
+        catch (Exception ex)
+        {
+            IsLoading = false;
+            Serilog.Log.Error(ex, "Failed to load item combos");
+            Views.ConfirmDialog.Alert("Couldn't load Item Combos",
+                $"Item Combos could not be loaded — a data file may be malformed:\n\n{ex.Message}");
+            return;
+        }
 
         Rows.Clear();
         foreach (var rec in _overlay.Effective())

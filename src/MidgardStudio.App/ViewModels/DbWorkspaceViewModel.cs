@@ -278,8 +278,21 @@ public sealed partial class DbWorkspaceViewModel : ObservableObject, IDisposable
         if (_overlay is not null) return;
 
         IsLoading = true;
-        _modeSet = await Task.Run(() => _session.GetModeSet(_schema));
-        _overlay = _modeSet.For(_session.Mode);
+        try
+        {
+            _modeSet = await Task.Run(() => _session.GetModeSet(_schema));
+            _overlay = _modeSet.For(_session.Mode);
+        }
+        catch (Exception ex)
+        {
+            // A malformed import/base file must not leave the screen spinning forever or silently swallow
+            // the error (the caller is fire-and-forget). Stop loading, log, and tell the user which DB failed.
+            IsLoading = false;
+            Serilog.Log.Error(ex, "Failed to load database {Schema}", _schema.Id);
+            Views.ConfirmDialog.Alert("Couldn't load this database",
+                $"“{_schema.Id}” could not be loaded — a data file may be malformed:\n\n{ex.Message}");
+            return;
+        }
 
         var editor = new RecordEditorViewModel(_overlay, _session.Commands, _references, _session.ScriptCatalog, _session.Mode, _session.Validation);
 

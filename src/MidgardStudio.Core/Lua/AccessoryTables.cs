@@ -45,55 +45,16 @@ public static class AccessoryTables
 
     private static string InsertBeforeTableClose(string text, string tableName, string line)
     {
-        int open = FindTableOpenBrace(text, tableName);
+        // Reuse the shared string- AND comment-aware scanner so a brace inside a Lua comment can't
+        // mis-locate the table's open/close (the old local scanners ignored comments).
+        int open = LuaScan.FindTableOpen(text, tableName);
         if (open < 0) return text;
 
-        int close = MatchBrace(text, open);
+        int close = LuaScan.FindMatchingBrace(text, open);
         if (close < 0) return text;
 
         // Insert the line on its own line just before the closing brace.
         string nl = text.Contains("\r\n") ? "\r\n" : "\n";
         return text[..close] + line + nl + text[close..];
-    }
-
-    private static int FindTableOpenBrace(string text, string tableName)
-    {
-        int i = 0;
-        while (i < text.Length)
-        {
-            int idx = text.IndexOf(tableName, i, StringComparison.Ordinal);
-            if (idx < 0) return -1;
-            // ensure standalone token
-            bool leftOk = idx == 0 || !(char.IsLetterOrDigit(text[idx - 1]) || text[idx - 1] == '_' || text[idx - 1] == '.');
-            int after = idx + tableName.Length;
-            int j = after;
-            while (j < text.Length && char.IsWhiteSpace(text[j])) j++;
-            if (leftOk && j < text.Length && text[j] == '=')
-            {
-                int k = j + 1;
-                while (k < text.Length && char.IsWhiteSpace(text[k])) k++;
-                if (k < text.Length && text[k] == '{') return k;
-            }
-            i = idx + tableName.Length;
-        }
-        return -1;
-    }
-
-    private static int MatchBrace(string text, int openIndex)
-    {
-        int depth = 0;
-        for (int i = openIndex; i < text.Length; i++)
-        {
-            char c = text[i];
-            if (c == '{') depth++;
-            else if (c == '}') { depth--; if (depth == 0) return i; }
-            else if (c == '"' || c == '\'')
-            {
-                char q = c;
-                i++;
-                while (i < text.Length && text[i] != q) { if (text[i] == '\\') i++; i++; }
-            }
-        }
-        return -1;
     }
 }

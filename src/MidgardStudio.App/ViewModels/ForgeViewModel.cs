@@ -338,7 +338,8 @@ public sealed partial class ForgeViewModel : ObservableObject
                 $"  Inventory icon:   data\\texture\\유저인터페이스\\item\\{icon}.bmp\r\n" +
                 $"  Collection art:   data\\texture\\유저인터페이스\\collection\\{icon}.bmp\r\n" +
                 $"  Headgear sprite:  data\\sprite\\악세사리\\여\\여_{spr}.spr  (+ .act)   [female]\r\n" +
-                $"                    data\\sprite\\악세사리\\남\\남_{spr}.spr  (+ .act)   [male]\r\n");
+                $"                    data\\sprite\\악세사리\\남\\남_{spr}.spr  (+ .act)   [male]\r\n",
+                new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true)); // BOM so editors reliably detect UTF-8 and render the Korean path hints
 
             StatusMessage = $"Exported {copied} data file(s) + folder layout. Pack the 'data' folder into your GRF.";
             try

@@ -317,8 +317,19 @@ public sealed partial class ClientItemsViewModel : ObservableObject, IDisposable
         if (_overlay is not null) return;
 
         IsLoading = true;
-        var modeSet = await Task.Run(() => _session.GetModeSet(_itemSchema));
-        _overlay = modeSet.For(_session.Mode);
+        try
+        {
+            var modeSet = await Task.Run(() => _session.GetModeSet(_itemSchema));
+            _overlay = modeSet.For(_session.Mode);
+        }
+        catch (Exception ex)
+        {
+            IsLoading = false;
+            Serilog.Log.Error(ex, "Failed to load client items");
+            Views.ConfirmDialog.Alert("Couldn't load Client Items",
+                $"Client Items could not be loaded — a data file may be malformed:\n\n{ex.Message}");
+            return;
+        }
 
         var list = new DbListViewModel(_overlay,
             key => _images.ItemIcon(_clientItems.GetOrCreate((int)key.AsInt).IdentifiedResourceName),

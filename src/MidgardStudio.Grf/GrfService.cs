@@ -41,6 +41,9 @@ public sealed class GrfService : IDisposable
 
     public bool IsConfigured => _configured;
 
+    /// <summary>Raised when the configured sources change, so caches built over GRF content can be dropped.</summary>
+    public event Action? SourcesChanged;
+
     /// <summary>The validated layered sources (GRF files and/or loose data folders) currently configured.</summary>
     public IReadOnlyList<string> Sources { get; private set; } = Array.Empty<string>();
 
@@ -55,11 +58,13 @@ public sealed class GrfService : IDisposable
         if (valid.Count == 0)
         {
             _configured = false;
+            SourcesChanged?.Invoke();
             return;
         }
 
         _multi.Update(valid.Select(p => new MultiGrfPath(p)).ToList());
         _configured = true;
+        SourcesChanged?.Invoke();
     }
 
     // ----- Read-only Explorer: browse ONE source at a time (never opened for writing) -----

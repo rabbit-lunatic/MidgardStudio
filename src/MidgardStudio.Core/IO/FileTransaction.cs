@@ -1,4 +1,6 @@
 using System.Runtime.ExceptionServices;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace MidgardStudio.Core.IO;
 
@@ -77,6 +79,12 @@ public sealed class FileTransaction
         try { if (File.Exists(path)) File.Delete(path); } catch { /* best effort */ }
     }
 
-    private string BackupPathFor(string path) =>
-        Path.Combine(_backupDir, Path.GetFileName(path) + ".bak");
+    // Backup name is unique per full path, so two staged files that share a leaf name (different folders)
+    // can never collide in the shared backup dir and cause a rollback to restore from the wrong backup.
+    private string BackupPathFor(string path)
+    {
+        var full = Path.GetFullPath(path);
+        var hash = Convert.ToHexString(SHA1.HashData(Encoding.UTF8.GetBytes(full)))[..8];
+        return Path.Combine(_backupDir, Path.GetFileName(path) + "." + hash + ".bak");
+    }
 }

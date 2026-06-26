@@ -72,6 +72,7 @@ public sealed class LuaTableParser
         SkipTrivia();
         while (Peek() != '}' && !Eof)
         {
+            int loopStart = _i;
             char c = Peek();
             if (c == '[')
             {
@@ -111,6 +112,10 @@ public sealed class LuaTableParser
 
             SkipTrivia();
             if (Peek() == ',' || Peek() == ';') { Next(); SkipTrivia(); }
+
+            // Guarantee forward progress: a stray non-identifier char would otherwise leave _i unchanged
+            // and spin the loop forever on a malformed/partially-written client file.
+            if (_i == loopStart) Next();
         }
         Expect('}');
         return table;
@@ -145,6 +150,7 @@ public sealed class LuaTableParser
             char c = Next();
             if (c == '\\')
             {
+                if (Eof) break; // trailing backslash with no escaped char — don't read past EOF
                 char e = Next();
                 sb.Append(e switch { 'n' => '\n', 't' => '\t', 'r' => '\r', _ => e });
             }
@@ -216,6 +222,6 @@ public sealed class LuaTableParser
 
     private bool Eof => _i >= _s.Length;
     private char Peek() => _i < _s.Length ? _s[_i] : '\0';
-    private char Next() => _s[_i++];
+    private char Next() => _i < _s.Length ? _s[_i++] : '\0'; // bounds-safe: never reads past EOF
     private void Expect(char c) { if (Peek() == c) Next(); }
 }

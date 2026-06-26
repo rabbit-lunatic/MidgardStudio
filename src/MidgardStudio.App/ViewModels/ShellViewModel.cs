@@ -133,18 +133,20 @@ public partial class ShellViewModel : ObservableObject
         };
 
         _intervalSaveTimer.Interval = TimeSpan.FromSeconds(60); // safe default; ApplySaveMode overrides it
-        _intervalSaveTimer.Tick += (_, _) => { if (IsModified) DoSave(createBackup: false); };
+        _intervalSaveTimer.Tick += (_, _) => { if (IsModified) DoSave(createBackup: false, interactive: false); };
         _editSaveTimer.Interval = TimeSpan.FromMilliseconds(1500);
-        _editSaveTimer.Tick += (_, _) => { _editSaveTimer.Stop(); if (IsModified) DoSave(createBackup: false); };
+        _editSaveTimer.Tick += (_, _) => { _editSaveTimer.Stop(); if (IsModified) DoSave(createBackup: false, interactive: false); };
         _wizard.OpenRequested += cfg => ApplyProfile(cfg);
         _wizard.CloseRequested += () =>
         {
-            // Closing returns to the workspace already loaded behind the overlay. On a genuine first run
-            // there is no valid workspace to return to, so closing the configuration window exits the app.
+            // Closing returns to the workspace already loaded behind the overlay. On a genuine first run there
+            // is nothing valid to return to, so closing exits the app — but confirm first so an accidental Esc
+            // or ✕ during setup can't quit the whole app without warning.
             var profile = _configService.ActiveProfile;
             if (profile is not null && profile.Paths.AllExist())
                 ShowWizard = false;
-            else
+            else if (Views.ConfirmDialog.Show("Quit Midgard Studio?",
+                         "No workspace is configured yet, so closing setup will exit Midgard Studio.", yes: "Quit"))
                 Exit();
         };
         _validation.Navigate = NavigateToIssue;
@@ -471,7 +473,7 @@ public partial class ShellViewModel : ObservableObject
     /// <summary>Writes pending changes. Returns false if the save failed (data is kept in the editor).
     /// Manual saves take a dated backup; auto-saves don't (to avoid spam). When <paramref name="showSummary"/>
     /// is set, a centered dialog reports what was written.</summary>
-    private bool DoSave(bool createBackup, bool showSummary = false, bool gated = false)
+    private bool DoSave(bool createBackup, bool showSummary = false, bool gated = false, bool interactive = true)
     {
         // Capture what's about to change (id + import path) so the backup/summary can label themselves;
         // the dirty flags are cleared by SaveAll, so this must run first.
@@ -499,9 +501,12 @@ public partial class ShellViewModel : ObservableObject
             // Never report a failed/partial save as clean: keep whatever is still dirty so the user can retry.
             IsModified = _session.Commands.IsModified || _clientItems.IsDirty;
             SaveCommand.NotifyCanExecuteChanged();
-            Views.ConfirmDialog.Alert("Save failed",
-                "Your changes were NOT fully saved and are still here in the editor:\n\n" + ex.Message +
-                "\n\nClose anything that might be using these files (for example a running server), then save again.");
+            // Background auto-save (interval/on-edit) must not pop a modal every tick when a file is locked
+            // (e.g. a running server) — it just logs and leaves the Save button lit. Only interactive saves alert.
+            if (interactive)
+                Views.ConfirmDialog.Alert("Save failed",
+                    "Your changes were NOT fully saved and are still here in the editor:\n\n" + ex.Message +
+                    "\n\nClose anything that might be using these files (for example a running server), then save again.");
             return false;
         }
 
@@ -733,7 +738,9 @@ public partial class ShellViewModel : ObservableObject
                     _mobSprite, _drops, NavigateTo);
                 _workspaces[id] = workspace;
             }
-            await workspace.EnsureLoadedAsync();
+            // One malformed database must not stop the rest from being indexed for search.
+            try { await workspace.EnsureLoadedAsync(); }
+            catch (Exception ex) { Serilog.Log.Error(ex, "Failed to preload {Id} for search", id); continue; }
             if (IsPaletteOpen && !string.IsNullOrWhiteSpace(PaletteQuery))
                 OnPaletteQueryChanged(PaletteQuery); // re-search now that this DB is available
         }

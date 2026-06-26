@@ -26,12 +26,18 @@ public sealed class ClientItemService
     {
         _session = session;
         // A profile switch points at a different server -> drop the cached client tables.
-        _session.WorkspaceReloaded += () => { _file = null; _official = null; _baseText = null; _savedSignature = null; };
+        _session.WorkspaceReloaded += () => { _file = null; _official = null; _baseText = null; _savedSignature = null; _signatureCache = null; };
+        // Every client content change goes through the command stack, so drop the memoized signature on any
+        // stack change instead of re-serializing all entries on every dirty poll (CanExecute requery).
+        _session.Commands.Changed += () => _signatureCache = null;
     }
 
     /// <summary>The serialized client-edit content captured at load and after each save; the dirty check
     /// compares the current content to it. Null until the client file is first read.</summary>
     private string? _savedSignature;
+
+    /// <summary>Memoized current signature, recomputed lazily after any command-stack change.</summary>
+    private string? _signatureCache;
 
     /// <summary>True when the in-memory client tables differ from what's on disk — drives both the Save
     /// button and the save-write decision. Computed by content comparison, so editing an item and then
@@ -106,14 +112,18 @@ public sealed class ClientItemService
         return new ItemInfoEntry { Id = id };
     }
 
-    /// <summary>Stores the entry into the correct table (routing by official id). Dirtiness is derived by
-    /// content comparison (see <see cref="IsDirty"/>), so there is no flag to set here.</summary>
+    /// <summary>Stores the entry into the correct table (routing by official id). Dirtiness is still derived by
+    /// content comparison (see <see cref="IsDirty"/>); the cache reset just forces that comparison to re-run.</summary>
     public void Upsert(ItemInfoEntry entry)
     {
         ClientFile.Custom.Remove(entry.Id);
         ClientFile.Override.Remove(entry.Id);
         if (TargetFor(entry.Id) == ItemInfoTarget.Override) ClientFile.Override[entry.Id] = entry;
         else ClientFile.Custom[entry.Id] = entry;
+        // Upsert is the single in-memory mutator of the client tables. Invalidate AFTER mutating (so a load
+        // triggered above can't re-cache the old value) — this covers callers that DON'T go through the command
+        // stack (validator quick-fixes, cross-list "Add in Client Items"), which would otherwise stay clean.
+        _signatureCache = null;
     }
 
     public void StageSave(FileTransaction tx)
@@ -127,6 +137,7 @@ public sealed class ClientItemService
             tx.Stage(BasePath, _codec.EncodeText(updated));
             _baseText = updated;
             _official = null; // re-index on demand
+            _signatureCache = null; // the no-op-override comparison depends on the (now-changed) official text
         }
         else
         {
@@ -155,6 +166,7 @@ public sealed class ClientItemService
         var tx = new FileTransaction(backupDir);
         StageSave(tx);
         tx.Commit();
+        _signatureCache = null;        // content/official may have shifted while staging
         _savedSignature = Signature(); // re-baseline: the on-disk state now matches memory
     }
 
@@ -162,7 +174,9 @@ public sealed class ClientItemService
     /// entries that actually differ from the official base. A no-op override identical to the official entry
     /// changes nothing in-game, so it isn't counted — that's what lets "edit an official item, then undo"
     /// settle back to a clean state instead of leaving a redundant override behind.</summary>
-    private string Signature()
+    private string Signature() => _signatureCache ??= ComputeSignature();
+
+    private string ComputeSignature()
     {
         if (_file is null) return string.Empty;
         var sb = new StringBuilder();
@@ -171,10 +185,11 @@ public sealed class ClientItemService
         foreach (var id in _file.Override.Keys.OrderBy(k => k))
         {
             var entry = _file.Override[id];
+            var entryText = ItemInfoWriter.FormatEntry(entry); // format once; reuse for both the no-op check and the append
             var official = Official.Entry(id);
-            if (official is not null && ItemInfoWriter.FormatEntry(entry) == ItemInfoWriter.FormatEntry(official))
+            if (official is not null && entryText == ItemInfoWriter.FormatEntry(official))
                 continue; // override identical to the official entry — a no-op, not a real change
-            sb.Append('O').Append(id).Append('\n').Append(ItemInfoWriter.FormatEntry(entry)).Append("\n\n");
+            sb.Append('O').Append(id).Append('\n').Append(entryText).Append("\n\n");
         }
         return sb.ToString();
     }
