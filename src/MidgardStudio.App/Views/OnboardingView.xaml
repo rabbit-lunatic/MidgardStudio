@@ -20,11 +20,15 @@
             </DoubleAnimation>
         </Storyboard>
 
-        <!-- One progress dot; the active page's dot widens into a magenta pill. -->
+        <!-- One progress dot; the active page's dot widens into a magenta pill. Width/Background are base
+             Style setters (NOT local values on the Border), so the DataTrigger can actually override them
+             — a local value would outrank the trigger and the active state would never show. -->
         <DataTemplate x:Key="DotTemplate" DataType="{x:Type vm:OnboardingPage}">
-            <Border Height="7" Width="7" CornerRadius="3.5" Margin="4,0" Background="#33FFFFFF">
+            <Border Height="7" CornerRadius="3.5" Margin="4,0">
                 <Border.Style>
                     <Style TargetType="Border">
+                        <Setter Property="Width" Value="7" />
+                        <Setter Property="Background" Value="#33FFFFFF" />
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding IsActive}" Value="True">
                                 <Setter Property="Background" Value="#D916FB" />
