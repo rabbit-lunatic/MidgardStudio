@@ -91,6 +91,29 @@ public class ClientSkillLuaTests
     }
 
     [Fact]
+    public void Splice_replaces_multiple_entries_in_one_pass()
+    {
+        var skills = new Dictionary<string, ClientSkill>();
+        ClientSkillReader.ReadInfo(Info, skills);
+        skills["NV_BASIC"].SkillName = "First Edit";
+        skills["SM_SWORD"].SkillName = "Second Edit";
+
+        string result = ExprKeyTableSplicer.Splice(Info, "SKILL_INFO_LIST", new[]
+        {
+            ("SKID.SM_SWORD", ClientSkillWriter.FormatInfo(skills["SM_SWORD"])), // pass out of order on purpose
+            ("SKID.NV_BASIC", ClientSkillWriter.FormatInfo(skills["NV_BASIC"])),
+        });
+
+        var again = new Dictionary<string, ClientSkill>();
+        ClientSkillReader.ReadInfo(result, again);
+        Assert.Equal(2, again.Count);
+        Assert.Equal("First Edit", again["NV_BASIC"].SkillName);
+        Assert.Equal("Second Edit", again["SM_SWORD"].SkillName);
+        Assert.DoesNotContain("Basic Skill", result);
+        Assert.DoesNotContain("Sword Mastery", result);
+    }
+
+    [Fact]
     public void Splice_inserts_new_entry_before_table_close()
     {
         var brand = new ClientSkill { Constant = "MY_CUSTOM", Aegis = "MY_CUSTOM", SkillName = "My Custom", MaxLv = 3, HasInfo = true };

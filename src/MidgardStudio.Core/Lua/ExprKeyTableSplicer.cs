@@ -36,18 +36,35 @@ public static class ExprKeyTableSplicer
                 $"Couldn't find the end of the '{tableName}' table in the client skill file, so your edit was NOT saved and the file was left untouched. " +
                 "The file may have a mismatched brace — open it and check, then save again.");
 
-        string text = original;
+        // Replace existing entries in one forward pass over the original (ascending offset), copying the
+        // untouched gaps — O(file size) total instead of re-allocating the whole file once per replaced entry.
+        // Entries never overlap, so the output is identical to the old replace-each pass.
+        var hits = list.Where(e => blocks.ContainsKey(e.ExprKey))
+            .Select(e => (Pos: blocks[e.ExprKey], e.Block))
+            .OrderBy(x => x.Pos.BracketStart)
+            .ToList();
 
-        // Replace existing entries, highest offset first so earlier spans stay valid.
-        foreach (var (exprKey, block) in list.Where(e => blocks.ContainsKey(e.ExprKey)).OrderByDescending(e => blocks[e.ExprKey].BracketStart))
+        string text;
+        if (hits.Count == 0)
         {
-            var b = blocks[exprKey];
-            int start = b.BracketStart;
-            while (start > 0 && (text[start - 1] == '\t' || text[start - 1] == ' ')) start--; // include line indent
-            int commaEnd = b.ValueClose + 1;
-            if (commaEnd < text.Length && text[commaEnd] == ',') commaEnd++;
-            string replacement = block.TrimEnd('\n');
-            text = text.Substring(0, start) + replacement + text.Substring(commaEnd);
+            text = original;
+        }
+        else
+        {
+            var sb = new StringBuilder(original.Length);
+            int cursor = 0;
+            foreach (var (pos, block) in hits)
+            {
+                int start = pos.BracketStart;
+                while (start > 0 && (original[start - 1] == '\t' || original[start - 1] == ' ')) start--; // include line indent
+                int commaEnd = pos.ValueClose + 1;
+                if (commaEnd < original.Length && original[commaEnd] == ',') commaEnd++;
+                sb.Append(original, cursor, start - cursor);
+                sb.Append(block.TrimEnd('\n'));
+                cursor = commaEnd;
+            }
+            sb.Append(original, cursor, original.Length - cursor);
+            text = sb.ToString();
         }
 
         // Insert new entries just before the table's closing brace.

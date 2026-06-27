@@ -144,7 +144,21 @@ public sealed class LuaTableParser
     private string ReadString()
     {
         char quote = Next();
+        int start = _i;
+
+        // Fast path: most strings (color codes, plain names) have no escapes — return a single substring.
+        while (!Eof)
+        {
+            char c = Peek();
+            if (c == '\\') break;       // contains an escape -> fall through to the rebuild path
+            if (c == quote) { string s = _s.Substring(start, _i - start); Next(); return s; }
+            Next();
+        }
+        if (Eof) return _s.Substring(start, _i - start); // unterminated string at EOF
+
+        // Slow path: rebuild with escapes resolved, keeping the un-escaped prefix already scanned.
         var sb = new StringBuilder();
+        sb.Append(_s, start, _i - start);
         while (!Eof)
         {
             char c = Next();
@@ -172,7 +186,9 @@ public sealed class LuaTableParser
         if (Peek() == '-') Next();
         while (!Eof && (char.IsDigit(Peek()) || Peek() == '.' || Peek() == 'e' || Peek() == 'E' || Peek() == 'x' || Peek() == 'X' || (Peek() >= 'a' && Peek() <= 'f') || (Peek() >= 'A' && Peek() <= 'F')))
             Next();
-        string num = _s.Substring(start, _i - start);
+        // Parse straight off the source span — the client files are dense with numbers, so a discarded
+        // substring per number is the dominant parse allocation.
+        ReadOnlySpan<char> num = _s.AsSpan(start, _i - start);
         if (num.StartsWith("0x", StringComparison.OrdinalIgnoreCase) &&
             long.TryParse(num[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hex))
             return hex;

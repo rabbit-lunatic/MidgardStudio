@@ -29,9 +29,10 @@ public static class LuaScan
             {
                 int start = i;
                 while (i < s.Length && (char.IsLetterOrDigit(s[i]) || s[i] == '_')) i++;
-                string ident = s.Substring(start, i - start);
+                int len = i - start;
                 i--; // the for-loop will advance past the identifier
-                if (ident == name)
+                // Compare the identifier region in place (no substring) — mirrors LuaTableParser.MatchIdentifierAt.
+                if (len == name.Length && string.CompareOrdinal(s, start, name, 0, len) == 0)
                 {
                     int k = i + 1;
                     while (k < s.Length && char.IsWhiteSpace(s[k])) k++;
