@@ -14,12 +14,13 @@
             <StackPanel>
                 <TextBlock Text="Backup Manager" Style="{StaticResource TitleScreen}" />
                 <TextBlock Opacity="0.65" FontSize="12" TextWrapping="Wrap"
-                           Text="A snapshot of your import data and client itemInfo is taken automatically after every save. Restore any point in time below." />
+                           Text="A snapshot of your server + client data is taken after each manual save; unchanged files are de-duplicated to save space. Restore, pin, verify, or export any point in time below." />
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
                 <ui:Button Content="Create backup now" Appearance="Primary" Command="{Binding CreateNowCommand}" Margin="0,0,8,0">
                     <ui:Button.Icon><ui:SymbolIcon Symbol="Save24" /></ui:Button.Icon>
                 </ui:Button>
+                <ui:Button Content="Import…" Command="{Binding ImportCommand}" Margin="0,0,8,0" />
                 <ui:Button Content="Open folder" Command="{Binding OpenFolderCommand}" Margin="0,0,8,0">
                     <ui:Button.Icon><ui:SymbolIcon Symbol="Folder24" /></ui:Button.Icon>
                 </ui:Button>
@@ -57,8 +58,16 @@
                           ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <ListView.View>
                         <GridView>
-                            <GridViewColumn Header="When" Width="150" DisplayMemberBinding="{Binding WhenText}" />
-                            <GridViewColumn Header="Label" Width="180" DisplayMemberBinding="{Binding Label}" />
+                            <GridViewColumn Header="" Width="26">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ui:SymbolIcon Symbol="Pin28" FontSize="14" Foreground="#9A5FF4" ToolTip="Pinned — kept regardless of retention"
+                                                       Visibility="{Binding Pinned, Converter={StaticResource BoolToVis}}" />
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                            <GridViewColumn Header="When" Width="120" DisplayMemberBinding="{Binding RelativeText}" />
+                            <GridViewColumn Header="Label" Width="170" DisplayMemberBinding="{Binding Label}" />
                             <GridViewColumn Header="Files" Width="50" DisplayMemberBinding="{Binding FileCount}" />
                             <GridViewColumn Header="Size" Width="74" DisplayMemberBinding="{Binding SizeText}" />
                         </GridView>
@@ -81,8 +90,12 @@
                                     <Run Text="{Binding FileCount, Mode=OneWay}" /><Run Text=" files" />
                                 </TextBlock>
                             </Border>
-                            <Border Background="#1FFFFFFF" CornerRadius="3" Padding="8,3">
+                            <Border Background="#1FFFFFFF" CornerRadius="3" Padding="8,3" Margin="0,0,8,0">
                                 <TextBlock Text="{Binding SizeText}" FontSize="11.5" />
+                            </Border>
+                            <Border Background="#1F7F6FD4" CornerRadius="3" Padding="8,3">
+                                <TextBlock FontSize="11.5"
+                                           Text="{Binding DataContext.EncodingChip, RelativeSource={RelativeSource AncestorType=UserControl}}" />
                             </Border>
                         </StackPanel>
                         <TextBlock Text="{Binding Note}" Opacity="0.7" TextWrapping="Wrap" Margin="0,10,0,0"
@@ -97,6 +110,15 @@
                                    CommandParameter="{Binding}">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowUndo24" /></ui:Button.Icon>
                         </ui:Button>
+                        <ui:Button Content="{Binding DataContext.PinButtonText, RelativeSource={RelativeSource AncestorType=UserControl}}" Margin="0,0,8,0"
+                                   Command="{Binding DataContext.TogglePinCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                   CommandParameter="{Binding}" />
+                        <ui:Button Content="Verify" Margin="0,0,8,0"
+                                   Command="{Binding DataContext.VerifyCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                   CommandParameter="{Binding}" />
+                        <ui:Button Content="Export…" Margin="0,0,8,0"
+                                   Command="{Binding DataContext.ExportCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                   CommandParameter="{Binding}" />
                         <ui:Button Content="Open" Margin="0,0,8,0"
                                    Command="{Binding DataContext.OpenFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                    CommandParameter="{Binding}">
@@ -110,14 +132,59 @@
                     </StackPanel>
 
                     <Border BorderBrush="#1AFFFFFF" BorderThickness="1" CornerRadius="4" Padding="6">
-                        <ListBox ItemsSource="{Binding Files}" Background="Transparent" BorderThickness="0"
-                                 FontFamily="Consolas" FontSize="11.5">
+                        <ListBox ItemsSource="{Binding DataContext.SelectedFiles, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                 Background="Transparent" BorderThickness="0" FontFamily="Consolas" FontSize="11.5"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                             <ListBox.ItemContainerStyle>
                                 <Style TargetType="ListBoxItem">
                                     <Setter Property="Padding" Value="2,1" />
                                     <Setter Property="Background" Value="Transparent" />
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                                 </Style>
                             </ListBox.ItemContainerStyle>
+                            <ListBox.GroupStyle>
+                                <GroupStyle>
+                                    <GroupStyle.HeaderTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Name}" FontFamily="Segoe UI" FontSize="11" FontWeight="SemiBold"
+                                                       Foreground="#8A8AA0" Margin="0,6,0,2" />
+                                        </DataTemplate>
+                                    </GroupStyle.HeaderTemplate>
+                                </GroupStyle>
+                            </ListBox.GroupStyle>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <DockPanel>
+                                        <Border DockPanel.Dock="Right" CornerRadius="3" Padding="6,1" Margin="6,0,16,0" VerticalAlignment="Center">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="#1F7FE0A0" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Changed}" Value="True">
+                                                            <Setter Property="Background" Value="#33D0A04A" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <TextBlock FontFamily="Segoe UI" FontSize="9.5" FontWeight="SemiBold">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Text" Value="UNCHANGED" />
+                                                        <Setter Property="Foreground" Value="#7FE0A0" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Changed}" Value="True">
+                                                                <Setter Property="Text" Value="CHANGED" />
+                                                                <Setter Property="Foreground" Value="#E8C06A" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Border>
+                                        <TextBlock Text="{Binding Path}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
                         </ListBox>
                     </Border>
                 </DockPanel>

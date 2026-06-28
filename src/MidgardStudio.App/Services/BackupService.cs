@@ -1,28 +1,56 @@
+using System;
 using System.IO;
+using System.Linq;
+using System.Security.Cryptography;
 using System.Text.Json;
-using System.Text.Json.Serialization;
+using MidgardStudio.Core.Backup;
 using MidgardStudio.Core.IO;
 
 namespace MidgardStudio.App.Services;
 
-/// <summary>One on-disk backup snapshot (a timestamped folder + manifest).</summary>
+/// <summary>One on-disk backup snapshot — a thin App wrapper over the Core <see cref="BackupManifest"/> plus
+/// its folder path, with display helpers the Backup Manager binds to.</summary>
 public sealed class BackupEntry
 {
-    public DateTime TimestampUtc { get; set; }
-    public string Label { get; set; } = string.Empty;
-    public string Note { get; set; } = string.Empty;
-    public List<string> Files { get; set; } = new();
-    public long TotalBytes { get; set; }
+    public BackupEntry(BackupManifest manifest, string folderPath)
+    {
+        Manifest = manifest;
+        FolderPath = folderPath;
+    }
 
-    /// <summary>Absolute path to the snapshot folder (set when listing; not persisted).</summary>
-    [JsonIgnore] public string FolderPath { get; set; } = string.Empty;
+    public BackupManifest Manifest { get; }
 
-    [JsonIgnore] public DateTime When => TimestampUtc.ToLocalTime();
-    [JsonIgnore] public string WhenText => When.ToString("yyyy-MM-dd  HH:mm:ss");
-    [JsonIgnore] public string DayText => When.ToString("dddd, dd MMM yyyy");
-    [JsonIgnore] public int FileCount => Files.Count;
-    [JsonIgnore] public string SizeText => HumanSize(TotalBytes);
-    [JsonIgnore] public string SummaryText => $"{WhenText}  ·  {FileCount} files  ·  {SizeText}";
+    /// <summary>Absolute path to the snapshot folder (runtime; not persisted).</summary>
+    public string FolderPath { get; }
+
+    public string Label => Manifest.Label;
+    public string Note => Manifest.Note;
+    public bool Pinned => Manifest.Pinned;
+    public DateTime TimestampUtc => Manifest.TimestampUtc;
+
+    public DateTime When => Manifest.TimestampUtc.ToLocalTime();
+    public string WhenText => When.ToString("yyyy-MM-dd  HH:mm:ss");
+    public string DayText => When.ToString("dddd, dd MMM yyyy");
+    public int FileCount => Manifest.Files.Count;
+    public string SizeText => HumanSize(Manifest.TotalBytes);
+    public string SummaryText => $"{WhenText}  ·  {FileCount} files  ·  {SizeText}";
+
+    /// <summary>Coarse relative age for the list (recomputed on each Refresh; not live-updating).</summary>
+    public string RelativeText
+    {
+        get
+        {
+            var d = DateTime.Now - When;
+            if (d.TotalSeconds < 60) return "just now";
+            if (d.TotalMinutes < 60) return $"{(int)d.TotalMinutes}m ago";
+            if (d.TotalHours < 24) return $"{(int)d.TotalHours}h ago";
+            if (d.TotalDays < 30) return $"{(int)d.TotalDays}d ago";
+            return When.ToString("dd MMM yyyy");
+        }
+    }
+
+    /// <summary>The snapshot's file paths (relative), for the details list.</summary>
+    public IReadOnlyList<string> Files => Manifest.Files.Select(f => f.Path).ToList();
 
     private static string HumanSize(long bytes)
     {
@@ -34,10 +62,12 @@ public sealed class BackupEntry
 }
 
 /// <summary>
-/// Dated snapshots of the editable data (the server <c>import/</c> YAML + the client itemInfo file).
-/// A backup is taken automatically after every save with a self-describing label, and can be made
-/// manually. Restores replace the current files with the snapshot, taking a safety backup first.
-/// Snapshots live under <c>%APPDATA%\Midgard Studio\backups\&lt;profile&gt;\&lt;timestamp&gt;\</c>.
+/// Dated snapshots of the editable data (server <c>import/</c> YAML + client itemInfo + <c>skillinfoz</c> +
+/// <c>datainfo</c>). A snapshot is taken after each manual save and before each restore. Per ADR-0003 each
+/// snapshot is a complete, self-contained restore point, but a file byte-identical to the previous snapshot
+/// (same per-file SHA-256, recorded in the manifest) is <b>hardlinked</b> instead of re-copied, so unchanged
+/// files cost ~0 extra disk. Snapshots live under
+/// <c>Documents\Midgard Studio\Backups\&lt;profile&gt;\&lt;timestamp&gt;\</c>.
 /// </summary>
 public sealed class BackupService
 {
@@ -55,8 +85,8 @@ public sealed class BackupService
 
     public string RootDir { get; } = MidgardStudio.Core.AppPaths.BackupsDir;
 
-    /// <summary>One-time move of pre-1.0 snapshots from %APPDATA%\Midgard Studio\backups to the new
-    /// Documents location, so existing backups aren't orphaned. Best-effort: old backups simply stay put on failure.</summary>
+    /// <summary>One-time move of pre-1.0 snapshots from %APPDATA%\Midgard Studio\backups to the new Documents
+    /// location, so existing backups aren't orphaned. Best-effort: old backups simply stay put on failure.</summary>
     private static void MigrateLegacyBackups()
     {
         try
@@ -94,10 +124,55 @@ public sealed class BackupService
         return null;
     }
 
-    /// <summary>Snapshots the current editable data. Returns null when there is nothing to back up.</summary>
+    private static string Sha256Hex(byte[] data) => Convert.ToHexString(SHA256.HashData(data));
+
+    /// <summary>The live editable files to snapshot, as (absolute source, snapshot-relative path).</summary>
+    private List<(string Abs, string Rel)> GatherSources()
+    {
+        var sources = new List<(string, string)>();
+        if (Directory.Exists(ImportDir))
+            foreach (var f in Directory.GetFiles(ImportDir, "*.yml", SearchOption.AllDirectories))
+                sources.Add((f, "import/" + Path.GetRelativePath(ImportDir, f).Replace('\\', '/')));
+
+        var itemInfo = ItemInfoWriteTarget();
+        if (itemInfo is not null && File.Exists(itemInfo))
+            sources.Add((itemInfo, "SystemEN/" + Path.GetFileName(itemInfo))); // itemInfo_C.lua's default home
+
+        foreach (var name in SkillFiles)
+        {
+            string p = Path.Combine(SkillInfoDir, name);
+            if (File.Exists(p)) sources.Add((p, "skillinfoz/" + name));
+        }
+        foreach (var name in SpriteFiles)
+        {
+            string p = Path.Combine(SpriteDataDir, name);
+            if (File.Exists(p)) sources.Add((p, "datainfo/" + name));
+        }
+        return sources;
+    }
+
+    /// <summary>Snapshots the current editable data. Unchanged files (same SHA-256 as the previous snapshot)
+    /// are hardlinked; changed/new files are copied. Returns null when there is nothing to back up.</summary>
     public BackupEntry? CreateBackup(string label, string note = "")
     {
         if (!Directory.Exists(ImportDir)) return null;
+
+        var sources = GatherSources();
+        if (sources.Count == 0) return null;
+
+        // Hash every source file (byte-exact dedup key + integrity checksum + diff signal).
+        var current = new List<(string Path, long Bytes, string Sha256)>(sources.Count);
+        var sourceByRel = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (abs, rel) in sources)
+        {
+            byte[] bytes = File.ReadAllBytes(abs);
+            current.Add((rel, bytes.LongLength, Sha256Hex(bytes)));
+            sourceByRel[rel] = abs;
+        }
+
+        // Plan against the most recent existing snapshot (newest first): link unchanged, copy the rest.
+        var previous = List().FirstOrDefault();
+        var plan = BackupPlanner.Plan(current, previous?.Manifest);
 
         var now = DateTime.Now;
         string stamp = now.ToString("yyyyMMdd-HHmmss-fff");
@@ -106,92 +181,193 @@ public sealed class BackupService
             dest = Path.Combine(ProfileDir, $"{stamp}-{n}");
         Directory.CreateDirectory(dest);
 
-        var files = new List<string>();
-        long bytes = 0;
-
-        foreach (var f in Directory.GetFiles(ImportDir, "*.yml", SearchOption.AllDirectories))
+        var files = new List<BackupFile>(plan.Count);
+        long totalBytes = 0;
+        foreach (var p in plan)
         {
-            string rel = Path.GetRelativePath(ImportDir, f);
-            string target = Path.Combine(dest, "import", rel);
+            string target = Path.Combine(dest, p.Path.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-            File.Copy(f, target, true);
-            files.Add("import/" + rel.Replace('\\', '/'));
-            bytes += new FileInfo(f).Length;
-        }
-
-        var itemInfo = ItemInfoWriteTarget();
-        if (itemInfo is not null && File.Exists(itemInfo))
-        {
-            string name = Path.GetFileName(itemInfo);
-            string target = Path.Combine(dest, "client", name);
-            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-            File.Copy(itemInfo, target, true);
-            files.Add("client/" + name);
-            bytes += new FileInfo(itemInfo).Length;
-        }
-
-        // Client skill + sprite files the app writes (skillinfoz/* and datainfo/*), each in its own subfolder.
-        void CopySet(string srcDir, string subdir, string[] names)
-        {
-            foreach (var name in names)
+            if (p.Action == BackupFileAction.Link && previous?.FolderPath is { } prevFolder)
             {
-                string src = Path.Combine(srcDir, name);
-                if (!File.Exists(src)) continue;
-                string target = Path.Combine(dest, subdir, name);
-                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                File.Copy(src, target, true);
-                files.Add(subdir + "/" + name);
-                bytes += new FileInfo(src).Length;
+                string blob = Path.Combine(prevFolder, p.Path.Replace('/', Path.DirectorySeparatorChar));
+                FileLink.HardLinkOrCopy(target, blob, sourceByRel[p.Path]); // hardlink to prev blob, else copy live
             }
-        }
-        CopySet(SkillInfoDir, "skillinfoz", SkillFiles);
-        CopySet(SpriteDataDir, "datainfo", SpriteFiles);
-
-        if (files.Count == 0)
-        {
-            try { Directory.Delete(dest, true); } catch { /* best effort */ }
-            return null;
+            else
+            {
+                File.Copy(sourceByRel[p.Path], target, overwrite: true);
+            }
+            files.Add(new BackupFile(p.Path, p.Bytes, p.Sha256));
+            totalBytes += p.Bytes;
         }
 
-        var entry = new BackupEntry
+        var manifest = new BackupManifest
         {
+            Version = 2,
             TimestampUtc = now.ToUniversalTime(),
             Label = label,
             Note = note,
+            Pinned = false,
+            EncodingCodepage = _session.ClientCodepage,
+            Ruleset = _session.Mode.ToString(),
             Files = files,
-            TotalBytes = bytes,
-            FolderPath = dest,
+            TotalBytes = totalBytes,
         };
-        // Write the manifest atomically and last, so a crash can't leave a manifest that points at
-        // half-copied data (List() treats a folder without a manifest as not-a-backup).
+
+        if (!WriteManifest(dest, manifest))
+        {
+            try { Directory.Delete(dest, true); } catch { /* best effort */ }
+            throw new IOException("Failed to write the backup manifest, so the snapshot was discarded.");
+        }
+
+        Prune();
+        return new BackupEntry(manifest, dest);
+    }
+
+    /// <summary>Writes manifest.json atomically (tmp + move) so a crash can't leave a folder whose manifest
+    /// points at half-written data (List() treats a folder without a manifest as not-a-backup).</summary>
+    private static bool WriteManifest(string dest, BackupManifest manifest)
+    {
         string manifestPath = Path.Combine(dest, "manifest.json");
         string manifestTmp = manifestPath + ".tmp";
         try
         {
-            File.WriteAllText(manifestTmp, JsonSerializer.Serialize(entry, JsonOptions));
+            File.WriteAllText(manifestTmp, JsonSerializer.Serialize(manifest, JsonOptions));
             File.Move(manifestTmp, manifestPath);
+            return true;
         }
         catch
         {
-            // A failed manifest write would leave a snapshot folder with no manifest (List() ignores it) plus
-            // an orphaned .tmp — remove both so the backups folder doesn't accumulate junk, then surface it.
             try { if (File.Exists(manifestTmp)) File.Delete(manifestTmp); } catch { /* best effort */ }
-            try { Directory.Delete(dest, true); } catch { /* best effort */ }
-            throw;
+            return false;
         }
-
-        Prune();
-        return entry;
     }
 
-    /// <summary>Keeps the newest N snapshots for the active profile (per <see cref="AppSettings.BackupRetention"/>),
-    /// deleting the oldest beyond the cap so the backups folder can't grow without bound.</summary>
+    /// <summary>Sets (or clears) the pinned flag on a snapshot, rewriting its manifest. Pinned snapshots are
+    /// exempt from retention pruning.</summary>
+    public void SetPinned(BackupEntry entry, bool pinned)
+    {
+        if (entry.Manifest.Pinned == pinned) return;
+        entry.Manifest.Pinned = pinned;
+        WriteManifest(entry.FolderPath, entry.Manifest);
+    }
+
+    // ---- slice 3: restore preview + encoding ----
+
+    /// <summary>Hashes the current live files and diffs them against the snapshot — i.e. what a restore would
+    /// change (overwrite / add / remove). Pure result from <c>Core.Backup.BackupDiff</c>.</summary>
+    public IReadOnlyList<BackupChange> PreviewRestore(BackupEntry entry)
+    {
+        var current = new List<(string Path, string Sha256)>();
+        foreach (var (abs, rel) in GatherSources())
+            current.Add((rel, Sha256Hex(File.ReadAllBytes(abs))));
+        return BackupDiff.Compare(entry.Manifest, current);
+    }
+
+    /// <summary>True when the snapshot's stamped Display Encoding is known and differs from the current profile's.</summary>
+    public bool EncodingDiffers(BackupEntry entry) =>
+        entry.Manifest.EncodingCodepage != 0 && entry.Manifest.EncodingCodepage != _session.ClientCodepage;
+
+    public int CurrentCodepage => _session.ClientCodepage;
+
+    public static string EncodingLabel(int codepage) => codepage <= 0 ? "unknown" : "CP" + codepage;
+
+    // ---- slice 5: integrity + what-changed ----
+
+    /// <summary>Re-hashes a snapshot's files and checks them against the manifest. Mismatch/Missing = corruption;
+    /// Unknown = a legacy file with no recorded hash.</summary>
+    public (int Ok, int Mismatch, int Unknown, int Missing) Verify(BackupEntry entry)
+    {
+        int ok = 0, mismatch = 0, unknown = 0, missing = 0;
+        foreach (var f in entry.Manifest.Files)
+        {
+            string path = Path.Combine(entry.FolderPath, f.Path.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(path)) { missing++; continue; }
+            if (f.Sha256 is null) { unknown++; continue; }
+            if (Sha256Hex(File.ReadAllBytes(path)) == f.Sha256) ok++; else mismatch++;
+        }
+        return (ok, mismatch, unknown, missing);
+    }
+
+    /// <summary>Per-file "changed (new/modified) vs carried-over" relative to the chronologically previous
+    /// snapshot — drives the details list's badges. A legacy file, or one with no previous, reads as changed.</summary>
+    public IReadOnlyDictionary<string, bool> ChangedSincePrevious(BackupEntry entry)
+    {
+        var all = List(); // newest first
+        int idx = -1;
+        for (int i = 0; i < all.Count; i++) if (all[i].FolderPath == entry.FolderPath) { idx = i; break; }
+        var prev = idx >= 0 && idx + 1 < all.Count ? all[idx + 1] : null; // next-older snapshot
+
+        var prevByPath = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        if (prev is not null) foreach (var f in prev.Manifest.Files) prevByPath[f.Path] = f.Sha256;
+
+        var result = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        foreach (var f in entry.Manifest.Files)
+            result[f.Path] = f.Sha256 is null
+                || !prevByPath.TryGetValue(f.Path, out var ps) || ps is null || ps != f.Sha256;
+        return result;
+    }
+
+    // ---- slice 4: export / import ----
+
+    /// <summary>Exports a snapshot as a self-contained .zip (materializes hardlinked blobs into the archive).</summary>
+    public void Export(BackupEntry entry, string zipPath)
+    {
+        if (File.Exists(zipPath)) File.Delete(zipPath);
+        System.IO.Compression.ZipFile.CreateFromDirectory(entry.FolderPath, zipPath);
+    }
+
+    /// <summary>Imports a .zip as a snapshot in the active profile: verifies each file against the manifest's
+    /// SHA-256 (rejecting a corrupt/incomplete archive), then registers it under the profile's Backups dir with
+    /// timestamp-collision suffixing. Extraction happens on the same volume as the destination so the final
+    /// move is a rename.</summary>
+    public BackupEntry Import(string zipPath)
+    {
+        Directory.CreateDirectory(ProfileDir);
+        string temp = Path.Combine(ProfileDir, ".import-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            System.IO.Compression.ZipFile.ExtractToDirectory(zipPath, temp);
+
+            string manifestPath = Path.Combine(temp, "manifest.json");
+            if (!File.Exists(manifestPath))
+                throw new InvalidDataException("That .zip isn't a Midgard backup — it has no manifest.json.");
+            var m = JsonSerializer.Deserialize<BackupManifest>(File.ReadAllText(manifestPath), JsonOptions)
+                ?? throw new InvalidDataException("The backup manifest in that .zip is unreadable.");
+
+            foreach (var f in m.Files)
+            {
+                string p = Path.Combine(temp, f.Path.Replace('/', Path.DirectorySeparatorChar));
+                if (!File.Exists(p))
+                    throw new InvalidDataException($"The archive is incomplete — missing {f.Path}.");
+                if (f.Sha256 is not null && Sha256Hex(File.ReadAllBytes(p)) != f.Sha256)
+                    throw new InvalidDataException($"The archive is corrupt — {f.Path} failed its checksum.");
+            }
+
+            string stamp = m.TimestampUtc.ToLocalTime().ToString("yyyyMMdd-HHmmss-fff");
+            string dest = Path.Combine(ProfileDir, stamp);
+            for (int n = 2; Directory.Exists(dest); n++) dest = Path.Combine(ProfileDir, $"{stamp}-{n}");
+            Directory.Move(temp, dest);
+            return new BackupEntry(m, dest);
+        }
+        catch
+        {
+            try { if (Directory.Exists(temp)) Directory.Delete(temp, true); } catch { /* best effort */ }
+            throw;
+        }
+    }
+
+    /// <summary>Keeps the newest N UNPINNED snapshots (per <see cref="AppSettings.BackupRetention"/>) plus all
+    /// pinned ones, deleting the rest. Deleting a folder unlinks its files; shared (hardlinked) blobs persist
+    /// while any other snapshot still references them, so pruning never breaks another snapshot.</summary>
     private void Prune()
     {
         int keep = Math.Max(1, _settings.Settings.BackupRetention);
-        foreach (var old in List().Skip(keep))
+        var refs = List()
+            .Select(e => new SnapshotRef(e.FolderPath, e.Manifest.TimestampUtc, e.Manifest.Pinned))
+            .ToList();
+        foreach (var folder in RetentionPolicy.SelectForPrune(refs, keep))
         {
-            try { if (Directory.Exists(old.FolderPath)) Directory.Delete(old.FolderPath, true); }
+            try { if (Directory.Exists(folder)) Directory.Delete(folder, true); }
             catch { /* best effort */ }
         }
     }
@@ -208,21 +384,21 @@ public sealed class BackupService
             if (!File.Exists(manifest)) continue;
             try
             {
-                var entry = JsonSerializer.Deserialize<BackupEntry>(File.ReadAllText(manifest));
-                if (entry is null) continue;
-                entry.FolderPath = dir;
-                list.Add(entry);
+                var m = JsonSerializer.Deserialize<BackupManifest>(File.ReadAllText(manifest), JsonOptions);
+                if (m is null) continue;
+                list.Add(new BackupEntry(m, dir));
             }
             catch { /* skip a corrupt manifest */ }
         }
-        return list.OrderByDescending(e => e.TimestampUtc).ToList();
+        return list.OrderByDescending(e => e.Manifest.TimestampUtc).ToList();
     }
 
     /// <summary>
-    /// Replaces the current editable files with the snapshot. A safety backup of the current state is
-    /// taken first; the writes go through a <see cref="FileTransaction"/> (atomic per file, rolled back
-    /// on failure); an empty/corrupt snapshot is rejected before anything is touched; and if the restore
-    /// fails partway the live data is automatically rolled back to the safety backup.
+    /// Replaces the current editable files with the snapshot. A safety backup of the current state is taken
+    /// first; the writes go through a <see cref="FileTransaction"/> (atomic per file, rolled back on failure);
+    /// an empty/corrupt snapshot is rejected before anything is touched; and if the restore fails partway the
+    /// live data is automatically rolled back to the safety backup. Folder-based, so it restores legacy and
+    /// dedup snapshots identically (a hardlinked snapshot file reads like any other file).
     /// </summary>
     public void Restore(BackupEntry entry)
     {
@@ -230,15 +406,15 @@ public sealed class BackupService
             throw new InvalidDataException("This backup's folder no longer exists on disk, so nothing was restored.");
 
         string importSrc = Path.Combine(entry.FolderPath, "import");
-        string clientSrc = Path.Combine(entry.FolderPath, "client");
+        // New snapshots store the itemInfo file under "SystemEN/" (its default home); older ones used "client/".
+        string clientSrc = Path.Combine(entry.FolderPath, "SystemEN");
+        if (!Directory.Exists(clientSrc)) clientSrc = Path.Combine(entry.FolderPath, "client");
         string? writeTarget = ItemInfoWriteTarget();
 
         var snapImport = Directory.Exists(importSrc)
             ? Directory.GetFiles(importSrc, "*.yml", SearchOption.AllDirectories)
             : Array.Empty<string>();
 
-        // Only restore the client file when the snapshot holds the exact expected filename (no copying an
-        // arbitrary first file over the live target).
         string? clientFile = null;
         if (Directory.Exists(clientSrc) && writeTarget is not null)
         {
@@ -258,7 +434,6 @@ public sealed class BackupService
 
         try
         {
-            // Overwrite each snapshot file atomically (per-file backup + temp + swap + rollback).
             var tx = new FileTransaction(Path.Combine(ImportDir, ".midgard-backup"));
             foreach (var f in snapImport)
                 tx.Stage(Path.Combine(ImportDir, Path.GetRelativePath(importSrc, f)), File.ReadAllBytes(f));
@@ -271,8 +446,8 @@ public sealed class BackupService
             Directory.CreateDirectory(ImportDir);
             tx.Commit();
 
-            // Make import/ match the snapshot by removing live files it doesn't contain (only when the
-            // snapshot actually has import files — a client-only snapshot must not wipe server data).
+            // Make import/ match the snapshot by removing live files it doesn't contain (only when the snapshot
+            // actually has import files — a client-only snapshot must not wipe server data).
             if (snapImport.Length > 0 && Directory.Exists(ImportDir))
             {
                 var keep = new HashSet<string>(
@@ -285,7 +460,6 @@ public sealed class BackupService
         }
         catch
         {
-            // Roll the live data back to the safety snapshot we just took, then surface the original error.
             if (safety is not null) TryRollback(safety);
             throw;
         }
@@ -305,7 +479,8 @@ public sealed class BackupService
                     File.Copy(f, target, true);
                 }
 
-            string clientSrc = Path.Combine(safety.FolderPath, "client");
+            string clientSrc = Path.Combine(safety.FolderPath, "SystemEN");
+            if (!Directory.Exists(clientSrc)) clientSrc = Path.Combine(safety.FolderPath, "client");
             string? writeTarget = ItemInfoWriteTarget();
             if (Directory.Exists(clientSrc) && writeTarget is not null)
             {
@@ -317,7 +492,7 @@ public sealed class BackupService
                 }
             }
 
-            // Roll back the client skill + sprite files too (they're in the safety snapshot now).
+            // Roll the client skill + sprite files back too (they're in the safety snapshot).
             void RestoreSet(string sub, string liveDir)
             {
                 foreach (var f in SnapFiles(safety.FolderPath, sub))
