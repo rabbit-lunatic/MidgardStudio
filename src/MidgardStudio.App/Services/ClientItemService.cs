@@ -1,6 +1,8 @@
+using System;
 using System.IO;
 using System.Linq;
 using System.Text;
+using MidgardStudio.Core.Commands;
 using MidgardStudio.Core.IO;
 using MidgardStudio.Core.Lua;
 using MidgardStudio.Core.Workspace;
@@ -13,7 +15,7 @@ namespace MidgardStudio.App.Services;
 /// (<c>tbl_custom</c>/<c>tbl_override</c>) for new/overridden items. Writes to the custom file when one
 /// is configured; otherwise (a "unified" server with only itemInfo.lua) splices edits into the base file.
 /// </summary>
-public sealed class ClientItemService
+public sealed class ClientItemService : IDirtySource
 {
     private readonly WorkspaceSession _session;
     private LuaFileCodec _codec => _session.ClientCodec; // fixed Windows-1252 (the RO client boundary), independent of the profile Display Encoding
@@ -44,6 +46,14 @@ public sealed class ClientItemService
     /// undoing back to its loaded/saved state correctly reports "nothing to save" (no sticky flag to leave
     /// lit), and a redundant override identical to the official entry is not treated as a change.</summary>
     public bool IsDirty => _file is not null && Signature() != _savedSignature;
+
+    /// <summary>Fires when dirtiness may have changed — forwarded from the command stack, since every
+    /// client edit runs through it (so <see cref="CompositeDirtyState"/> can treat this as a source).</summary>
+    public event Action? DirtyChanged
+    {
+        add => _session.Commands.Changed += value;
+        remove => _session.Commands.Changed -= value;
+    }
 
     private WorkspacePaths Paths => _session.Paths;
 

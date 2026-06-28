@@ -1,5 +1,7 @@
+using System;
 using System.IO;
 using System.Linq;
+using MidgardStudio.Core.Commands;
 using MidgardStudio.Core.IO;
 using MidgardStudio.Core.Lua;
 using MidgardStudio.Core.Workspace;
@@ -14,7 +16,7 @@ namespace MidgardStudio.App.Services;
 /// Windows-1252 (the fixed RO client boundary), independent of the profile Display Encoding. The skill tree
 /// (skilltreeview) is intentionally out of scope.
 /// </summary>
-public sealed class ClientSkillService
+public sealed class ClientSkillService : IDirtySource
 {
     private readonly WorkspaceSession _session;
 
@@ -65,6 +67,14 @@ public sealed class ClientSkillService
 
     /// <summary>True when any skill's content differs from what's on disk.</summary>
     public bool IsDirty => _dirty.Count > 0;
+
+    /// <summary>Fires when dirtiness may have changed — forwarded from the command stack, since every
+    /// client edit runs through it (so <see cref="CompositeDirtyState"/> can treat this as a source).</summary>
+    public event Action? DirtyChanged
+    {
+        add => _session.Commands.Changed += value;
+        remove => _session.Commands.Changed -= value;
+    }
 
     private void DropCaches()
     {

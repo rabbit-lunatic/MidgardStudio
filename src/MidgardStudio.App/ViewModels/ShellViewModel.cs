@@ -8,7 +8,9 @@ using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MidgardStudio.App.Services;
+using MidgardStudio.Core.Commands;
 using MidgardStudio.Core.Model;
+using MidgardStudio.Core.Updates;
 using MidgardStudio.Core.Workspace;
 using Wpf.Ui.Controls;
 
@@ -62,7 +64,8 @@ public partial class ShellViewModel : ObservableObject
     [ObservableProperty]
     private string _updateMessage = string.Empty;
 
-    private string _updateUrl = UpdateCheckService.ReleasesPage;
+    private string _updateUrl = GitHubReleaseFeed.ReleasesPage;
+    private readonly UpdateChecker _updateChecker = new(new GitHubReleaseFeed());
 
     [ObservableProperty]
     private DbSectionViewModel? _selectedSection;
@@ -113,6 +116,9 @@ public partial class ShellViewModel : ObservableObject
     /// <summary>Name of the active profile, shown in the menu-bar status strip.</summary>
     public string ActiveProfileName => _session.Config.Name;
 
+    /// <summary>Every unsaved-change source (undo stack + client trackers) aggregated into one seam.</summary>
+    private readonly CompositeDirtyState _dirty;
+
     public ShellViewModel(IWorkspaceConfigService config, SchemaRegistry schemas, WorkspaceSession session,
         ReferenceResolver references, GrfBrowserViewModel grfBrowser, ClientItemService clientItems,
         ClientSkillService clientSkills,
@@ -130,6 +136,7 @@ public partial class ShellViewModel : ObservableObject
         _validator = validator;
         _clientItems = clientItems;
         _clientSkills = clientSkills;
+        _dirty = new CompositeDirtyState(_session.Commands, _clientItems, _clientSkills);
         _images = images;
         _sprite = sprite;
         _mobSprite = mobSprite;
@@ -197,10 +204,10 @@ public partial class ShellViewModel : ObservableObject
 
     private async Task CheckForUpdatesAsync()
     {
-        var info = await UpdateCheckService.CheckAsync();
+        var info = await _updateChecker.CheckAsync(AppVersion);
         if (info is null) return; // up to date / couldn't check — no banner
-        _updateUrl = info.Value.Url;
-        UpdateMessage = $"Version {info.Value.Version} is available — you're on {AppVersion}.";
+        if (!string.IsNullOrEmpty(info.Url)) _updateUrl = info.Url; // else keep the releases-page fallback
+        UpdateMessage = $"Version {info.Version} is available — you're on {AppVersion}.";
         UpdateAvailable = true;
     }
 
@@ -231,7 +238,7 @@ public partial class ShellViewModel : ObservableObject
     {
         // Include client dirtiness so the modified indicator matches the Save button (which is gated on
         // HasUnsavedChanges) — e.g. a client-only edit/undo keeps the two in sync.
-        IsModified = _session.Commands.IsModified || _clientItems.IsDirty || _clientSkills.IsDirty;
+        IsModified = _dirty.IsDirty;
         UndoCommand.NotifyCanExecuteChanged();
         RedoCommand.NotifyCanExecuteChanged();
         SaveCommand.NotifyCanExecuteChanged(); // grey the Save button out when there's nothing to write
@@ -524,7 +531,7 @@ public partial class ShellViewModel : ObservableObject
     /// <summary>True when there are server or client edits not yet written to disk. Client dirtiness is a
     /// content comparison (<see cref="ClientItemService.IsDirty"/>), so undoing a client edit back to
     /// baseline correctly clears it instead of leaving Save lit.</summary>
-    public bool HasUnsavedChanges => _session.Commands.IsModified || _clientItems.IsDirty || _clientSkills.IsDirty;
+    public bool HasUnsavedChanges => _dirty.IsDirty;
 
     /// <summary>Gate for the Save command — disabled (greyed out) when nothing has changed.</summary>
     private bool CanSave() => HasUnsavedChanges;
@@ -560,7 +567,7 @@ public partial class ShellViewModel : ObservableObject
         {
             Serilog.Log.Error(ex, "Save failed");
             // Never report a failed/partial save as clean: keep whatever is still dirty so the user can retry.
-            IsModified = _session.Commands.IsModified || _clientItems.IsDirty || _clientSkills.IsDirty;
+            IsModified = _dirty.IsDirty;
             SaveCommand.NotifyCanExecuteChanged();
             // Background auto-save (interval/on-edit) must not pop a modal every tick when a file is locked
             // (e.g. a running server) — it just logs and leaves the Save button lit. Only interactive saves alert.
@@ -572,7 +579,7 @@ public partial class ShellViewModel : ObservableObject
         }
 
         // OR client dirtiness in so a half-failed save can never be shown as a clean state.
-        IsModified = _session.Commands.IsModified || _clientItems.IsDirty || _clientSkills.IsDirty;
+        IsModified = _dirty.IsDirty;
         SaveCommand.NotifyCanExecuteChanged();
 
         // The list of files this save wrote, with friendly labels — reused for the backup note + summary.
@@ -845,7 +852,7 @@ public partial class ShellViewModel : ObservableObject
     /// (command-routed fixes also fire <see cref="OnCommandsChanged"/>; this covers the rest + client dirty).</summary>
     private void OnFixApplied()
     {
-        IsModified = _session.Commands.IsModified || _clientItems.IsDirty || _clientSkills.IsDirty;
+        IsModified = _dirty.IsDirty;
         UndoCommand.NotifyCanExecuteChanged();
         RedoCommand.NotifyCanExecuteChanged();
         SaveCommand.NotifyCanExecuteChanged();

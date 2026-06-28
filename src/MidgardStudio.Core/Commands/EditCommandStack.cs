@@ -4,7 +4,7 @@ namespace MidgardStudio.Core.Commands;
 /// Global undo/redo stack. Edits during an open batch are grouped into one undo step. A saved-marker
 /// tracks whether anything changed since the last save without clearing history.
 /// </summary>
-public sealed class EditCommandStack
+public sealed class EditCommandStack : IDirtySource
 {
     private readonly Stack<IEditCommand> _undo = new();
     private readonly Stack<IEditCommand> _redo = new();
@@ -23,6 +23,16 @@ public sealed class EditCommandStack
 
     /// <summary>True when the undo depth differs from the last save point.</summary>
     public bool IsModified => _undo.Count != _savedDepth;
+
+    // The undo stack is one dirty source among several (see CompositeDirtyState); expose it as such
+    // without widening the public surface — IsModified / Changed stay the primary API.
+    bool IDirtySource.IsDirty => IsModified;
+
+    event Action? IDirtySource.DirtyChanged
+    {
+        add => Changed += value;
+        remove => Changed -= value;
+    }
 
     public string? NextUndoDescription => _undo.Count > 0 ? _undo.Peek().Description : null;
 
