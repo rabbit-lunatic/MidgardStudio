@@ -135,4 +135,43 @@ public class UpdateCheckerTests
         var checker = new UpdateChecker(new FakeFeed(Release("v1.2.3.4")));
         Assert.Null(await checker.CheckAsync("1.2.3"));
     }
+
+    // --- detailed check (interactive "Check for updates" UI) ---
+
+    [Fact]
+    public async Task Detailed_reports_an_available_update()
+    {
+        var r = await new UpdateChecker(new FakeFeed(Release("v1.0.4"))).CheckDetailedAsync("1.0.3");
+        Assert.Equal(UpdateStatus.UpdateAvailable, r.Status);
+        Assert.Equal("1.0.4", r.Update!.Version);
+    }
+
+    [Fact]
+    public async Task Detailed_reports_up_to_date_for_the_same_version()
+    {
+        var r = await new UpdateChecker(new FakeFeed(Release("v1.0.3"))).CheckDetailedAsync("1.0.3");
+        Assert.Equal(UpdateStatus.UpToDate, r.Status);
+        Assert.Null(r.Update);
+    }
+
+    [Fact]
+    public async Task Detailed_treats_a_newer_prerelease_as_up_to_date()
+    {
+        var r = await new UpdateChecker(new FakeFeed(Release("v2.0.0", prerelease: true))).CheckDetailedAsync("1.0.3");
+        Assert.Equal(UpdateStatus.UpToDate, r.Status);
+    }
+
+    [Fact]
+    public async Task Detailed_reports_failure_when_the_feed_is_unreachable()
+    {
+        var r = await new UpdateChecker(new FakeFeed(null)).CheckDetailedAsync("1.0.3");
+        Assert.Equal(UpdateStatus.CheckFailed, r.Status);
+    }
+
+    [Fact]
+    public async Task Detailed_reports_failure_for_malformed_json()
+    {
+        var r = await new UpdateChecker(new FakeFeed("{ not json")).CheckDetailedAsync("1.0.3");
+        Assert.Equal(UpdateStatus.CheckFailed, r.Status);
+    }
 }

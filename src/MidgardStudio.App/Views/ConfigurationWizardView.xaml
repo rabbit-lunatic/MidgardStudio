@@ -138,28 +138,49 @@
             <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
                 <StackPanel MaxWidth="720" HorizontalAlignment="Left">
 
-                    <!-- Profile basics -->
+                    <!-- Profile basics — name + ruleset share a row, encoding + its help share the next, to keep
+                         the card short. -->
                     <ui:Card Padding="16,14">
                         <StackPanel>
                             <TextBlock Text="Profile" Style="{StaticResource SectionTitle}" Margin="0,0,0,10" />
-                            <TextBlock Text="Profile name" Style="{StaticResource FieldCaption}" />
-                            <ui:TextBox Text="{Binding ProfileName, UpdateSourceTrigger=PropertyChanged}"
-                                        MaxWidth="360" HorizontalAlignment="Left" />
-                            <TextBlock Text="System (ruleset)" Style="{StaticResource FieldCaption}" Margin="0,14,0,5" />
-                            <StackPanel Orientation="Horizontal">
-                                <RadioButton Content="Renewal" GroupName="System" IsChecked="{Binding IsRenewal}" Margin="0,0,20,0" />
-                                <RadioButton Content="Pre-Renewal" GroupName="System"
-                                             IsChecked="{Binding IsRenewal, Converter={StaticResource InverseBool}}" />
-                            </StackPanel>
 
-                            <TextBlock Text="Display Encoding" Style="{StaticResource FieldCaption}" Margin="0,14,0,3" />
-                            <ComboBox ItemsSource="{Binding EncodingOptions}"
-                                      SelectedValuePath="Codepage" DisplayMemberPath="Label"
-                                      SelectedValue="{Binding SelectedCodepage}"
-                                      MaxWidth="360" HorizontalAlignment="Left" />
-                            <TextBlock Opacity="0.55" FontSize="11" TextWrapping="Wrap" Margin="0,5,0,0" MaxWidth="440"
-                                       HorizontalAlignment="Left" TextAlignment="Left"
-                                       Text="Fallback used to read legacy, non-UTF-8 names in your server database files (e.g. a Latin-1 “Poção” or an EUC-KR item_db). Server files are saved as UTF-8; client text and icon / sprite resource names always use the standard Windows-1252." />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="28" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Profile name" Style="{StaticResource FieldCaption}" />
+                                    <ui:TextBox Text="{Binding ProfileName, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" VerticalAlignment="Bottom">
+                                    <TextBlock Text="System (ruleset)" Style="{StaticResource FieldCaption}" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <RadioButton Content="Renewal" GroupName="System" VerticalAlignment="Center"
+                                                     IsChecked="{Binding IsRenewal}" Margin="0,0,20,0" />
+                                        <RadioButton Content="Pre-Renewal" GroupName="System" VerticalAlignment="Center"
+                                                     IsChecked="{Binding IsRenewal, Converter={StaticResource InverseBool}}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Grid>
+
+                            <Grid Margin="0,14,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="18" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Display Encoding" Style="{StaticResource FieldCaption}" />
+                                    <ComboBox ItemsSource="{Binding EncodingOptions}"
+                                              SelectedValuePath="Codepage" DisplayMemberPath="Label"
+                                              SelectedValue="{Binding SelectedCodepage}"
+                                              Width="300" HorizontalAlignment="Left" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" VerticalAlignment="Center" Opacity="0.55" FontSize="11" TextWrapping="Wrap"
+                                           Text="Fallback used to read legacy, non-UTF-8 names in your server database files (e.g. a Latin-1 “Poção” or an EUC-KR item_db). Server files are saved as UTF-8; client text and icon / sprite resource names always use the standard Windows-1252." />
+                            </Grid>
                         </StackPanel>
                     </ui:Card>
 

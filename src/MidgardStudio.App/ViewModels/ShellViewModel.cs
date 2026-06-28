@@ -497,6 +497,10 @@ public partial class ShellViewModel : ObservableObject
     [RelayCommand]
     private void About() => Views.AboutDialog.ShowAbout();
 
+    /// <summary>Help ▸ Check for Updates — opens the branded checker dialog (reuses the Core update checker).</summary>
+    [RelayCommand]
+    private void CheckForUpdates() => Views.UpdateDialog.ShowCheck(_updateChecker, AppVersion, GitHubReleaseFeed.ReleasesPage);
+
     [RelayCommand]
     private void OpenWizard()
     {
