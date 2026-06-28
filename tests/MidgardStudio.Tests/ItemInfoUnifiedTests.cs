@@ -63,4 +63,30 @@ public class ItemInfoUnifiedTests
         Assert.Equal("Brand New", official.Entry(200)!.IdentifiedDisplayName);
         Assert.Contains("function main()", result);
     }
+
+    [Fact]
+    public void Splice_after_semicolon_entry_does_not_inject_double_separator()
+    {
+        // A table whose last entry ends in ';' must not get a stray ',' appended after it (";," = two
+        // abutting separators, a Lua syntax error). Regression guard for the hand-rolled separator that
+        // ignored ';' before it was routed through LuaScan.SeparatorBeforeNewEntry.
+        const string semiTerminated =
+            "tbl = {\n" +
+            "\t[100] = {\n" +
+            "\t\tidentifiedDisplayName = \"Old\",\n" +
+            "\t\tidentifiedResourceName = \"res_old\",\n" +
+            "\t\tslotCount = 0\n" +
+            "\t};\n" +
+            "}\n";
+
+        var added = new ItemInfoEntry { Id = 200, IdentifiedDisplayName = "Brand New", IdentifiedResourceName = "res200" };
+        string result = new UnifiedItemInfoWriter().Splice(semiTerminated, new[] { added });
+
+        string compact = result.Replace("\r", "").Replace("\n", "").Replace("\t", "").Replace(" ", "");
+        Assert.DoesNotContain(";,", compact);
+
+        var official = new OfficialItemInfo(result);
+        Assert.True(official.Contains(100));
+        Assert.True(official.Contains(200));
+    }
 }

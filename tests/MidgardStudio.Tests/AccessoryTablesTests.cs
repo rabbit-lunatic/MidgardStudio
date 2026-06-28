@@ -41,4 +41,27 @@ public class AccessoryTablesTests
         Assert.Equal(before.Count + 1, after.Count);
         Assert.Equal(nextId, after["ACCESSORY_TEST_MIDGARD"]);
     }
+
+    [Fact]
+    public void Append_constant_throws_when_table_missing()
+    {
+        // The target table isn't in the file — must fail loud (edit kept, file untouched), not silently no-op.
+        Assert.Throws<InvalidDataException>(() =>
+            AccessoryTables.AppendConstant("local other = {}\n", "SKID", "CUSTOM_1", 6608));
+    }
+
+    [Fact]
+    public void Append_name_throws_when_table_missing()
+    {
+        Assert.Throws<InvalidDataException>(() =>
+            AccessoryTables.AppendName("local other = {}\n", "AccNameTable", "ACCESSORY_IDs", "CUSTOM_1", "_custom"));
+    }
+
+    [Fact]
+    public void Append_constant_throws_when_brace_unbalanced()
+    {
+        // Table opens but never closes — a malformed file. Must throw, not corrupt or silently drop.
+        Assert.Throws<InvalidDataException>(() =>
+            AccessoryTables.AppendConstant("SKID = {\n\tAT_FOO = 1,\n", "SKID", "CUSTOM_1", 6608));
+    }
 }

@@ -57,9 +57,7 @@ public sealed class UnifiedItemInfoWriter
                     $"Couldn't find the closing brace of the '{tableName}' table to insert new entries, so your edit was NOT saved and the file was left untouched. " +
                     "The file may have a mismatched brace — open it and check, then save again.");
 
-            int p = close2 - 1;
-            while (p > open2 && char.IsWhiteSpace(text[p])) p--;
-            string sep = (text[p] == '{' || text[p] == ',') ? string.Empty : ",";
+            string sep = LuaScan.SeparatorBeforeNewEntry(text, open2, close2);
 
             var sb = new StringBuilder();
             sb.Append(sep).Append('\n');

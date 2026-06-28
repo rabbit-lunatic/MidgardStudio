@@ -47,11 +47,21 @@ public static class AccessoryTables
     {
         // Reuse the shared string- AND comment-aware scanner so a brace inside a Lua comment can't
         // mis-locate the table's open/close (the old local scanners ignored comments).
+        // These tables (SKID / ACCESSORY_IDs / AccNameTable / npc tables) are always present in a valid
+        // base file, so a missing table means a malformed/incompatible file. Fail LOUD — the save path
+        // keeps the edit in memory and rolls the transaction back — rather than silently returning the
+        // file unchanged (which committed clean while dropping the edit, and could orphan references).
         int open = LuaScan.FindTableOpen(text, tableName);
-        if (open < 0) return text;
+        if (open < 0)
+            throw new InvalidDataException(
+                $"Couldn't find the '{tableName}' table in the client Lua file, so your change was NOT saved and the file was left untouched. " +
+                "The file may be malformed or missing that table — open it and check, then save again.");
 
         int close = LuaScan.FindMatchingBrace(text, open);
-        if (close < 0) return text;
+        if (close < 0)
+            throw new InvalidDataException(
+                $"Couldn't find the end of the '{tableName}' table in the client Lua file, so your change was NOT saved and the file was left untouched. " +
+                "The file may have a mismatched brace — open it and check, then save again.");
 
         // Add a field separator if the last entry lacks one — see LuaScan.SeparatorBeforeNewEntry (the rule
         // that bit v1.0.1). Place it right after the last value, then the new line just before the close brace.
