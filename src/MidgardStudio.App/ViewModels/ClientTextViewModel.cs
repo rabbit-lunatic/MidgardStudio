@@ -86,13 +86,19 @@ public sealed partial class ClientTextViewModel : ObservableObject
         try
         {
             string aegis = _server.GetString("AegisName") ?? ("item" + _server.GetInt("Id"));
-            var result = _sprite.LinkAccessory(aegis, SpriteName.Trim());
-            ClassNum = result.ViewId;
-            if (_server.Origin != RecordOrigin.Base)
-                _stack.Execute(new SetFieldCommand(_server, "View", result.ViewId));
+            var planned = _sprite.PlanAccessory(aegis, SpriteName.Trim());
+            // Queue the registration + the View edit as one undo step (written on Save).
+            using (_stack.BeginBatch("Link accessory sprite"))
+            {
+                _stack.Execute(new ListMutateCommand("Link accessory sprite",
+                    () => _sprite.AddPending(planned), () => _sprite.RemovePending(planned)));
+                if (_server.Origin != RecordOrigin.Base)
+                    _stack.Execute(new SetFieldCommand(_server, "View", planned.Id));
+            }
+            ClassNum = planned.Id;
 
-            SpriteLinkMessage = $"Linked '{result.Sprite}' as {result.ConstantName} → View {result.ViewId}. "
-                + (_server.Origin == RecordOrigin.Base ? $"Override the item and set View = {result.ViewId}." : "Server View set.");
+            SpriteLinkMessage = $"Queued '{planned.Sprite}' as {planned.ConstantName} → View {planned.Id}; written on Save. "
+                + (_server.Origin == RecordOrigin.Base ? $"Override the item and set View = {planned.Id}." : "Server View set.");
         }
         catch (Exception ex)
         {

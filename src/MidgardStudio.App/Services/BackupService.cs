@@ -76,6 +76,14 @@ public sealed class BackupService
 
     private string ImportDir => Path.Combine(_session.Paths.ServerDbRoot, "import");
 
+    // The client files the app's writers touch — snapshotted alongside import/ + itemInfo so a Restore rolls
+    // back everything the app can change. Derived from _session.Paths, mirroring ClientSkillService's
+    // skillinfoz/* and SpriteLinkService/MobSpriteService's datainfo/* write targets.
+    private string SkillInfoDir => Path.Combine(_session.Paths.LuaFilesRoot, "skillinfoz");
+    private string SpriteDataDir => Path.Combine(_session.Paths.LuaFilesRoot, "datainfo");
+    private static readonly string[] SkillFiles = { "skillid.lub", "skillinfolist.lub", "skilldescript.lub", "skilldelaylist.lub" };
+    private static readonly string[] SpriteFiles = { "accessoryid.lub", "accname.lub", "accname_eng.lub", "npcidentity.lub", "jobname.lub" };
+
     /// <summary>The single client itemInfo file the app writes to (custom file, else the unified base).</summary>
     private string? ItemInfoWriteTarget()
     {
@@ -121,6 +129,23 @@ public sealed class BackupService
             files.Add("client/" + name);
             bytes += new FileInfo(itemInfo).Length;
         }
+
+        // Client skill + sprite files the app writes (skillinfoz/* and datainfo/*), each in its own subfolder.
+        void CopySet(string srcDir, string subdir, string[] names)
+        {
+            foreach (var name in names)
+            {
+                string src = Path.Combine(srcDir, name);
+                if (!File.Exists(src)) continue;
+                string target = Path.Combine(dest, subdir, name);
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                File.Copy(src, target, true);
+                files.Add(subdir + "/" + name);
+                bytes += new FileInfo(src).Length;
+            }
+        }
+        CopySet(SkillInfoDir, "skillinfoz", SkillFiles);
+        CopySet(SpriteDataDir, "datainfo", SpriteFiles);
 
         if (files.Count == 0)
         {
@@ -221,7 +246,10 @@ public sealed class BackupService
             if (File.Exists(named)) clientFile = named;
         }
 
-        if (snapImport.Length == 0 && clientFile is null)
+        string[] snapSkill = SnapFiles(entry.FolderPath, "skillinfoz");
+        string[] snapSprite = SnapFiles(entry.FolderPath, "datainfo");
+
+        if (snapImport.Length == 0 && clientFile is null && snapSkill.Length == 0 && snapSprite.Length == 0)
             throw new InvalidDataException(
                 "This backup is empty or unreadable, so nothing was restored — your current data is untouched.");
 
@@ -236,6 +264,10 @@ public sealed class BackupService
                 tx.Stage(Path.Combine(ImportDir, Path.GetRelativePath(importSrc, f)), File.ReadAllBytes(f));
             if (clientFile is not null && writeTarget is not null)
                 tx.Stage(writeTarget, File.ReadAllBytes(clientFile));
+            foreach (var f in snapSkill)
+                tx.Stage(Path.Combine(SkillInfoDir, Path.GetFileName(f)), File.ReadAllBytes(f));
+            foreach (var f in snapSprite)
+                tx.Stage(Path.Combine(SpriteDataDir, Path.GetFileName(f)), File.ReadAllBytes(f));
             Directory.CreateDirectory(ImportDir);
             tx.Commit();
 
@@ -284,8 +316,28 @@ public sealed class BackupService
                     File.Copy(named, writeTarget, true);
                 }
             }
+
+            // Roll back the client skill + sprite files too (they're in the safety snapshot now).
+            void RestoreSet(string sub, string liveDir)
+            {
+                foreach (var f in SnapFiles(safety.FolderPath, sub))
+                {
+                    string target = Path.Combine(liveDir, Path.GetFileName(f));
+                    Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                    File.Copy(f, target, true);
+                }
+            }
+            RestoreSet("skillinfoz", SkillInfoDir);
+            RestoreSet("datainfo", SpriteDataDir);
         }
         catch { /* best effort; the caller rethrows the original failure */ }
+    }
+
+    /// <summary>The files stored in a snapshot's subfolder (skillinfoz / datainfo), or empty.</summary>
+    private static string[] SnapFiles(string folder, string sub)
+    {
+        string dir = Path.Combine(folder, sub);
+        return Directory.Exists(dir) ? Directory.GetFiles(dir) : Array.Empty<string>();
     }
 
     public void Delete(BackupEntry entry)

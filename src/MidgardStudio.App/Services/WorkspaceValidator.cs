@@ -1,6 +1,7 @@
 using MidgardStudio.Core.Lua;
 using MidgardStudio.Core.Model;
 using MidgardStudio.Core.Validation;
+using MidgardStudio.Core.Sprites;
 using MidgardStudio.Core.Validation.Validators;
 using MidgardStudio.Grf;
 
@@ -122,10 +123,19 @@ public sealed class WorkspaceValidator
             {
                 RuleId = "XFILE.MOB_NOT_REGISTERED",
                 Category = "Client Mobs", // DbId stays mob_db so "Go to" opens the Monsters list (no Client Mobs tab)
-                Fix = string.IsNullOrEmpty(aegis) ? null
-                    : new QuickFix("Register mob sprite", () => _mobSprite.RegisterMob(id, aegis, aegis)),
+                Fix = string.IsNullOrEmpty(aegis) ? null : MakeMobSpriteFix(id, aegis),
             });
         }
+    }
+
+    /// <summary>The mob-sprite quick-fix as a reversible registration: Apply queues it (undoable, written on
+    /// Save), Revert removes the queued entry. Captures the pending entry so undo pulls exactly it.</summary>
+    private QuickFix MakeMobSpriteFix(int id, string aegis)
+    {
+        PendingRegistration? pending = null;
+        return new QuickFix("Register mob sprite",
+            () => { pending = _mobSprite.PlanMob(id, aegis, aegis); _mobSprite.AddPending(pending); },
+            () => { if (pending is not null) _mobSprite.RemovePending(pending); });
     }
 
     /// <summary>Client skill validation: the Core internal-consistency rules plus a cross-check against the

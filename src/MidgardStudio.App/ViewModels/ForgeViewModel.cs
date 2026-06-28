@@ -248,22 +248,32 @@ public sealed partial class ForgeViewModel : ObservableObject
 
         int view = 0;
         string spriteNote = string.Empty;
+        Core.Sprites.PendingRegistration? plannedSprite = null;
         if (IsHeadgear && !string.IsNullOrWhiteSpace(SpriteName) && _sprite.IsAvailable)
         {
             try
             {
-                var link = _sprite.LinkAccessory(aegis, SpriteName.Trim());
-                view = link.ViewId;
+                plannedSprite = _sprite.PlanAccessory(aegis, SpriteName.Trim());
+                view = plannedSprite.Id;
                 record.SetRaw("View", view);
-                spriteNote = $"  Registered sprite as {link.ConstantName} (View {view}).";
+                spriteNote = $"  Sprite queued as {plannedSprite.ConstantName} (View {view}); written on Save.";
             }
             catch (Exception ex)
             {
+                plannedSprite = null;
                 spriteNote = "  Sprite registration failed: " + ex.Message;
             }
         }
 
-        _session.Commands.Execute(new AddRecordCommand(overlay, record));
+        // The record add and its sprite registration are one undo step, so undo removes both (no orphan
+        // pending mapping left behind, and the queued sprite is discarded if the new item is undone).
+        using (_session.Commands.BeginBatch("Forge item"))
+        {
+            _session.Commands.Execute(new AddRecordCommand(overlay, record));
+            if (plannedSprite is { } ps)
+                _session.Commands.Execute(new ListMutateCommand("Link accessory sprite",
+                    () => _sprite.AddPending(ps), () => _sprite.RemovePending(ps)));
+        }
 
         // Client itemInfo — synced so View==ClassNum and Slots==slotCount by construction.
         var entry = _clientItems.GetOrCreate(id);

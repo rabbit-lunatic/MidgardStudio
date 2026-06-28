@@ -136,10 +136,11 @@ public partial class ShellViewModel : ObservableObject
         _validator = validator;
         _clientItems = clientItems;
         _clientSkills = clientSkills;
-        _dirty = new CompositeDirtyState(_session.Commands, _clientItems, _clientSkills);
         _images = images;
         _sprite = sprite;
         _mobSprite = mobSprite;
+        // Sprite registrations are queued in memory and flushed on Save, so they're dirty sources too.
+        _dirty = new CompositeDirtyState(_session.Commands, _clientItems, _clientSkills, _sprite, _mobSprite);
         _drops = drops;
         _backups = backups;
         _mapCache = mapCache;
@@ -550,7 +551,9 @@ public partial class ShellViewModel : ObservableObject
         var saveTargets = _session.DirtySaveTargets();
         bool clientDirty = _clientItems.IsDirty;
         bool clientSkillDirty = _clientSkills.IsDirty;
-        if (saveTargets.Count == 0 && !clientDirty && !clientSkillDirty)
+        bool spriteDirty = _sprite.IsDirty;
+        bool mobSpriteDirty = _mobSprite.IsDirty;
+        if (saveTargets.Count == 0 && !clientDirty && !clientSkillDirty && !spriteDirty && !mobSpriteDirty)
         {
             IsModified = _session.Commands.IsModified;
             SaveCommand.NotifyCanExecuteChanged();
@@ -566,6 +569,8 @@ public partial class ShellViewModel : ObservableObject
             _session.SaveAll();      // server import YAML (only modified DBs are rewritten)
             _clientItems.Save();     // client itemInfo_C.lua (spliced in place — never overwrites functions)
             _clientSkills.Save();    // client skillinfoz lua (spliced in place)
+            _sprite.Save();          // accessory sprite tables (accessoryid/accname) — queued registrations
+            _mobSprite.Save();       // mob sprite tables (npcidentity/jobname) — queued registrations
         }
         catch (Exception ex)
         {
@@ -585,6 +590,7 @@ public partial class ShellViewModel : ObservableObject
         // OR client dirtiness in so a half-failed save can never be shown as a clean state.
         IsModified = _dirty.IsDirty;
         SaveCommand.NotifyCanExecuteChanged();
+        _validation.OnSaved(); // fixes are persisted now — clear the "Fixed (pending save)" markers
 
         // The list of files this save wrote, with friendly labels — reused for the backup note + summary.
         var written = saveTargets
@@ -592,6 +598,8 @@ public partial class ShellViewModel : ObservableObject
             .ToList();
         if (clientDirty) written.Add(new("Client items", _clientItems.SaveTargetPath));
         if (clientSkillDirty) written.Add(new("Client skills", _clientSkills.SaveTargetPath));
+        if (spriteDirty) written.Add(new("Accessory sprites", _sprite.SaveTargetPath));
+        if (mobSpriteDirty) written.Add(new("Mob sprites", _mobSprite.SaveTargetPath));
 
         // Snapshot the freshly-saved state into a dated, self-describing backup (manual saves only).
         if (createBackup)

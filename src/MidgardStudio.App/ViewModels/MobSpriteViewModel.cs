@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MidgardStudio.App.Common;
 using MidgardStudio.App.Services;
+using MidgardStudio.Core.Commands;
 using MidgardStudio.Core.Model;
 
 namespace MidgardStudio.App.ViewModels;
@@ -16,12 +17,14 @@ public sealed partial class MobSpriteViewModel : ObservableObject
     private readonly DbRecord _server;
     private readonly MobSpriteService _service;
     private readonly GrfImageService _images;
+    private readonly EditCommandStack _stack;
 
-    public MobSpriteViewModel(DbRecord server, MobSpriteService service, GrfImageService images)
+    public MobSpriteViewModel(DbRecord server, MobSpriteService service, GrfImageService images, EditCommandStack stack)
     {
         _server = server;
         _service = service;
         _images = images;
+        _stack = stack;
 
         _spriteName = server.GetString("AegisName") ?? string.Empty; // sprite name defaults to AegisName
         RegisteredConstant = service.IsAvailable ? service.FindConstantForMob(server.GetInt("Id")) : null;
@@ -55,11 +58,19 @@ public sealed partial class MobSpriteViewModel : ObservableObject
         if (!_service.IsAvailable || string.IsNullOrWhiteSpace(SpriteName)) return;
         try
         {
-            string aegis = _server.GetString("AegisName") ?? ("mob" + _server.GetInt("Id"));
-            var result = _service.RegisterMob(_server.GetInt("Id"), aegis, SpriteName.Trim());
-            StatusMessage = result.AlreadyRegistered
-                ? $"Updated jobname: {result.ConstantName} → '{result.Sprite}'."
-                : $"Registered {result.ConstantName} = {_server.GetInt("Id")} → sprite '{result.Sprite}'. npcidentity.lub & jobname.lub updated.";
+            int mobId = _server.GetInt("Id");
+            string sprite = SpriteName.Trim();
+            if (_service.HasPending(mobId, sprite))
+            {
+                StatusMessage = $"'{sprite}' is already queued for this monster (pending save).";
+                return;
+            }
+            string aegis = _server.GetString("AegisName") ?? ("mob" + mobId);
+            var planned = _service.PlanMob(mobId, aegis, sprite);
+            _stack.Execute(new ListMutateCommand("Register mob sprite: " + planned.ConstantName,
+                () => _service.AddPending(planned),
+                () => _service.RemovePending(planned)));
+            StatusMessage = $"Queued {planned.ConstantName} = {_server.GetInt("Id")} → sprite '{planned.Sprite}'. Written to npcidentity.lub & jobname.lub on Save.";
             RefreshPreview();
         }
         catch (Exception ex)

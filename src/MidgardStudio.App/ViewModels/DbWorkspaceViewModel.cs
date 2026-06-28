@@ -382,7 +382,7 @@ public sealed partial class DbWorkspaceViewModel : ObservableObject, IDisposable
 
         Editor.Load(row.Key);
         SideEditor = SupportsMobSpriteEditing
-            ? new MobSpriteViewModel(row.Record, _mobSprite!, _images!)
+            ? new MobSpriteViewModel(row.Record, _mobSprite!, _images!, _session.Commands)
             : null; // client itemInfo editing now lives in the dedicated Client Items section
 
         AuxEditor = BuildAuxEditor(row);
